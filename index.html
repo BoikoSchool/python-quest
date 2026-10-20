@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#c9dcf7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b1630" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Python Quest — тренажер Python для учнів 5–9 класів. Працює просто в браузері планшета.">
+  <title>Python Quest</title>
+  <!-- Іконки з'являться на етапі 3; порожня іконка прибирає зайвий запит favicon.ico. -->
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="topbar__brand" href="#/">Python Quest</a>
+    <nav class="topbar__nav" aria-label="Розділи">
+      <a class="topbar__link" href="#/" data-nav="map">Карта</a>
+      <a class="topbar__link" href="#/sandbox" data-nav="sandbox">Пісочниця</a>
+    </nav>
+    <div class="py-status" id="py-status" role="status" aria-live="polite">
+      <span class="py-status__dot py-status__dot--loading" aria-hidden="true"></span>
+      <span>Готуємо Python…</span>
+    </div>
+  </header>
+  <div class="py-progress" id="py-progress" role="progressbar" aria-label="Готуємо Python"><span></span></div>
+
+  <main class="page" id="main">
+    <p class="page__loading">Завантажуємо місії…</p>
+  </main>
+
+  <noscript>
+    <p class="notice notice--bad">Для тренажера потрібен JavaScript. Увімкни його в налаштуваннях браузера.</p>
+  </noscript>
+</body>
+</html>

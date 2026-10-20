@@ -1,0 +1,55 @@
+# Публікація сайту на GitHub Pages після кожного push у гілку main.
+#   1. Перевіряє місії: формат і те, що стартові шаблони не проходять тести.
+#      Еталонних розв'язків у репозиторії немає, тому — режим --no-solutions.
+#   2. Публікує лише файли сайту. Розв'язки, тести, інструменти й документи на сайт не потрапляють.
+# Якщо в сайту з'явиться новий файл чи папка (на етапі 3 — sw.js, manifest.webmanifest, icons/),
+# допиши їх у крок «Збираємо файли сайту».
+# Етап 3: перед публікацією тут же запускатимуться тести Playwright.
+
+name: Публікація на GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Перевірка місій (формат і стартові шаблони)
+        run: |
+          node --version
+          node tools/validate-missions.mjs --no-solutions
+
+      - name: Збираємо файли сайту
+        run: |
+          mkdir _site
+          cp -r index.html css js vendor _site/
+          mkdir _site/missions
+          cp missions/*.json _site/missions/
+          du -sh _site
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5

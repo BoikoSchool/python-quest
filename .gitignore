@@ -1,0 +1,14 @@
+# Залежності для інструментів і тестів (сайту вони не потрібні)
+node_modules/
+
+# Результати Playwright
+test-results/
+playwright-report/
+blob-report/
+
+# Еталонні розв'язки місій живуть лише локально — у публічний репозиторій не потрапляють
+missions/solutions/
+
+# Службові файли систем
+.DS_Store
+Thumbs.db

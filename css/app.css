@@ -1,0 +1,894 @@
+/* Python Quest — стилі.
+ *
+ * Кольори й розміри — лише змінні в :root (світла тема) і в блоці темної теми.
+ * Поверхні двох видів:
+ *   --raised-*  «підняті»: верхня панель, картки місій. На етапі 2 стануть «рідким склом».
+ *   --surface   робочі: умова, редактор, вхідні дані, результат. Завжди непрозорі й контрастні.
+ */
+
+:root {
+  color-scheme: light;
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Ubuntu, sans-serif;
+  --font-code: ui-monospace, "SF Mono", Menlo, "Roboto Mono", "Cascadia Mono", "DejaVu Sans Mono", monospace;
+  --code-size: 16px; /* A− / A+ на етапі 2: від 14 до 22 px */
+
+  /* Тло сторінки — ранкове небо. Окремий шар (body::before), на ньому лежатиме скло. */
+  --sky: linear-gradient(165deg, #c9dcf7 0%, #d4ecef 48%, #f4e6bd 100%);
+
+  --ink: #15233d;
+  --ink-muted: #4a5872;
+  --line: #d3dae6;
+
+  --raised-bg: #ffffff;
+  --raised-border: #d3dae6;
+  --raised-shadow: 0 1px 2px rgb(21 35 61 / 0.06), 0 10px 28px rgb(21 35 61 / 0.08);
+
+  --surface: #ffffff;
+  --surface-muted: #f2f5fa;
+
+  --accent: #2c5fa8;          /* синій Python: посилання, «Перевірити», фокус */
+  --accent-ink: #ffffff;
+  --run: #ffd43b;             /* жовтий Python: «Запустити» */
+  --run-ink: #1a1a1a;
+  --ok: #1c7a47;
+  --ok-bg: #e4f3ea;
+  --bad: #b42318;
+  --bad-bg: #fdecea;
+  --warn-bg: #fff3cd;
+  --focus: #1f5fd1;
+
+  --code-bg: #ffffff;
+  --code-text: #15233d;
+  --code-caret: #15233d;
+  --code-gutter-bg: #f2f5fa;
+  --code-gutter-text: #5d6a80;
+  --code-active-line: #eef3fb;
+  --code-error-line: #fde2df;
+  --code-selection: #c7dafa;
+  --code-bracket: #dfe8f7;
+  --code-keyword: #7a3db8;
+  --code-string: #1c7a47;
+  --code-number: #a3480b;
+  --code-comment: #5d6a80;
+  --code-function: #2557a0;
+  --code-invalid: #b42318;
+
+  --radius-xl: 28px;
+  --radius-lg: 24px;
+  --radius-md: 20px;
+  --radius-sm: 12px;
+  --tap: 48px; /* мінімальна висота кнопок (вимога — не менше 44 px) */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    /* Нічне небо */
+    --sky: linear-gradient(165deg, #0b1630 0%, #0d2a31 55%, #2a2410 100%);
+
+    --ink: #e9eef7;
+    --ink-muted: #a9b5c9;
+    --line: #2b3954;
+
+    --raised-bg: #152038;
+    --raised-border: #2b3954;
+    --raised-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 28px rgb(0 0 0 / 0.35);
+
+    --surface: #111a2c;
+    --surface-muted: #18233a;
+
+    --accent: #8db6ff;
+    --accent-ink: #0b1630;
+    --ok: #6fd69b;
+    --ok-bg: #12321f;
+    --bad: #ff8a80;
+    --bad-bg: #3a1714;
+    --warn-bg: #3a300f;
+    --focus: #8db6ff;
+
+    --code-bg: #0e1626;
+    --code-text: #e9eef7;
+    --code-caret: #ffd43b;
+    --code-gutter-bg: #121c30;
+    --code-gutter-text: #93a1b8;
+    --code-active-line: #17223a;
+    --code-error-line: #4a1d19;
+    --code-selection: #2b4677;
+    --code-bracket: #24365a;
+    --code-keyword: #d2a8ff;
+    --code-string: #7ee2a8;
+    --code-number: #ffb37a;
+    --code-comment: #93a1b8;
+    --code-function: #8db6ff;
+    --code-invalid: #ff8a80;
+  }
+}
+
+/* ---------- Основа ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: #c9dcf7;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #0b1630;
+  }
+}
+
+/* Небо — окремим нерухомим шаром (background-attachment: fixed на iPad смикається). */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--sky);
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+h1:focus,
+[tabindex="-1"]:focus {
+  outline: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+pre {
+  margin: 0;
+  font-family: var(--font-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Верхня панель ---------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px 20px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  min-height: 64px;
+  background: var(--raised-bg);
+  border-bottom: 1px solid var(--raised-border);
+  box-shadow: var(--raised-shadow);
+}
+
+.topbar__brand {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.topbar__nav {
+  display: flex;
+  gap: 4px;
+}
+
+.topbar__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 16px;
+  border-radius: 999px;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.topbar__link:hover {
+  background: var(--surface-muted);
+}
+
+.topbar__link[aria-current="page"] {
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.py-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--ink-muted);
+}
+
+.py-status__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+}
+
+.py-status__dot--ready {
+  background: var(--ok);
+}
+
+.py-status__dot--failed {
+  background: var(--bad);
+}
+
+/* Смуга «Готуємо Python…» під верхньою панеллю */
+.py-progress {
+  position: sticky;
+  top: 64px;
+  z-index: 9;
+  height: 4px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.py-progress span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  border-radius: 4px;
+  background: var(--accent);
+  animation: py-progress 1.4s ease-in-out infinite;
+}
+
+@keyframes py-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+/* ---------- Сторінка ---------- */
+
+.page {
+  padding: 20px 16px 48px;
+}
+
+.page__loading {
+  text-align: center;
+  color: var(--ink-muted);
+}
+
+.notice {
+  margin: 16px auto;
+  max-width: 760px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-bg);
+  color: var(--ink);
+}
+
+.notice--bad {
+  background: var(--bad-bg);
+}
+
+/* ---------- Кнопки й позначки ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  background: var(--surface-muted);
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.btn--run {
+  background: var(--run);
+  color: var(--run-ink);
+  box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.12);
+}
+
+.btn--check {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn--ghost {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.btn--small {
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 15px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+}
+
+.chip--started {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+}
+
+.chip--done {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+/* ---------- Карта місій: стежка квесту ---------- */
+
+.map {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.map__title {
+  margin: 8px 0 4px;
+  font-size: 36px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.map__lead {
+  margin: 0 0 24px;
+  color: var(--ink-muted);
+  font-size: 18px;
+}
+
+.topic__title {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.topic__missions {
+  position: relative;
+  margin: 0 0 32px;
+  padding: 0;
+  list-style: none;
+}
+
+/* Лінія стежки, що з'єднує номери місій */
+.topic__missions::before {
+  content: "";
+  position: absolute;
+  top: 36px;
+  bottom: 36px;
+  left: 35px;
+  border-left: 3px dashed color-mix(in srgb, var(--ink) 28%, transparent);
+}
+
+.topic__missions li + li {
+  margin-top: 14px;
+}
+
+.mission-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+  padding: 14px 18px 14px 12px;
+  border-radius: var(--radius-lg);
+  background: var(--raised-bg);
+  border: 1px solid var(--raised-border);
+  box-shadow: var(--raised-shadow);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.mission-card:hover {
+  border-color: var(--accent);
+}
+
+.mission-card__number {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  font-size: 20px;
+  font-weight: 800;
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 2px var(--line);
+}
+
+.mission-card--started .mission-card__number {
+  box-shadow: inset 0 0 0 3px var(--accent);
+  color: var(--accent);
+}
+
+.mission-card--done .mission-card__number {
+  background: var(--ok);
+  color: var(--surface);
+  box-shadow: none;
+}
+
+.mission-card__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mission-card__title {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.mission-card__story {
+  color: var(--ink-muted);
+  font-size: 15px;
+}
+
+.sandbox-card {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--raised-bg);
+  border: 1px dashed var(--raised-border);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.sandbox-card:hover {
+  border-color: var(--accent);
+}
+
+.sandbox-card__title {
+  font-weight: 700;
+  font-size: 19px;
+}
+
+.sandbox-card__text {
+  color: var(--ink-muted);
+  font-size: 15px;
+}
+
+.map__note {
+  margin-top: 24px;
+  color: var(--ink-muted);
+  font-size: 15px;
+}
+
+/* ---------- Робоче місце: умова, редактор, результат ---------- */
+
+.workspace {
+  display: grid;
+  gap: 16px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.workspace--sandbox {
+  max-width: 1000px;
+}
+
+/* Широкий екран (альбомний планшет, ноутбук): умова ліворуч, код праворуч. */
+@media (min-width: 900px) {
+  .workspace:not(.workspace--sandbox) {
+    grid-template-columns: minmax(280px, 2fr) 3fr;
+    align-items: start;
+  }
+
+  .task {
+    position: sticky;
+    top: 84px;
+  }
+
+  /* Пісочниця на широкому екрані: код ліворуч, результат праворуч. */
+  .workspace--sandbox {
+    max-width: 1400px;
+  }
+
+  .workspace--sandbox .work {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    grid-template-areas:
+      "title title"
+      "toolbar toolbar"
+      "editor output"
+      "stdin output";
+    align-items: start;
+    gap: 12px 16px;
+  }
+
+  .workspace--sandbox .work__title { grid-area: title; }
+  .workspace--sandbox .toolbar { grid-area: toolbar; }
+  .workspace--sandbox .editor { grid-area: editor; height: clamp(260px, 52vh, 640px); }
+  .workspace--sandbox .stdin { grid-area: stdin; }
+  .workspace--sandbox .output { grid-area: output; align-self: stretch; }
+}
+
+.task,
+.stdin,
+.output {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.task {
+  padding: 20px 22px;
+}
+
+.task__topic {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.task__heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.task__title {
+  margin: 2px 0 8px;
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.task__story {
+  margin: 0 0 12px;
+  color: var(--ink-muted);
+}
+
+.task__text {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.example__title {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.example__io {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.example__io .io {
+  flex: 1 1 140px;
+}
+
+.task__back {
+  margin: 16px 0 0;
+}
+
+.work {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.work__title {
+  margin: 4px 0 0;
+  font-size: 28px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.toolbar__status {
+  color: var(--ink-muted);
+  font-size: 15px;
+  padding: 0 8px;
+}
+
+.editor {
+  height: clamp(220px, 36vh, 520px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--code-bg);
+}
+
+.editor .cm-editor {
+  height: 100%;
+}
+
+.editor:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.stdin {
+  padding: 4px 16px;
+}
+
+.stdin summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stdin__help {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--ink-muted);
+  font-size: 15px;
+}
+
+.stdin__field {
+  display: block;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  color: var(--code-text);
+  font-family: var(--font-code);
+  font-size: var(--code-size);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.output {
+  padding: 8px 16px 16px;
+  scroll-margin: 84px 0 16px; /* щоб верхня панель не закривала результат */
+}
+
+.output__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.output__title {
+  margin: 0;
+  font-size: 19px;
+}
+
+.output__empty,
+.output__nothing {
+  color: var(--ink-muted);
+}
+
+.output__time {
+  margin: 8px 0 0;
+  color: var(--ink-muted);
+  font-size: 15px;
+}
+
+.console {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  color: var(--code-text);
+  font-size: var(--code-size);
+  line-height: 1.5;
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.console__err {
+  color: var(--bad);
+}
+
+.console__prompt,
+.console__echo {
+  color: var(--ink-muted);
+}
+
+.console__echo {
+  font-style: italic;
+}
+
+/* Помилки та пояснення */
+.problem {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--bad-bg);
+  border-left: 4px solid var(--bad);
+}
+
+.problem__title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.problem__text {
+  margin: 4px 0 0;
+}
+
+.problem__original {
+  margin: 6px 0 0;
+  font-family: var(--font-code);
+  font-size: 14px;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Перевірка */
+.verdict {
+  margin: 8px 0 4px;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.verdict--ok {
+  color: var(--ok);
+}
+
+.verdict--bad {
+  color: var(--bad);
+}
+
+.failure {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.failure__title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.io__label {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.io__text {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  font-size: var(--code-size);
+}
+
+.io__empty {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+.question {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.question__set {
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+}
+
+.question__text {
+  margin-bottom: 8px;
+  padding: 0;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.question__option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap);
+  padding: 6px 12px;
+  margin-top: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.question__option input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.question__feedback {
+  min-height: 1.5em;
+  margin: 8px 0 0;
+  font-weight: 600;
+  color: var(--bad);
+}
+
+.success {
+  margin-top: 16px;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  background: var(--ok-bg);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.success__title {
+  margin: 0;
+  flex-basis: 100%;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ok);
+}
+
+.success__next {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+/* ---------- Менше руху, якщо учень так налаштував пристрій ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .py-progress span {
+    animation: none;
+    width: 100%;
+    opacity: 0.6;
+  }
+}

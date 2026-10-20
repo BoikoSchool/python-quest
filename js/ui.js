@@ -1,0 +1,349 @@
+// Усе, що бачить учень: карта місій, робоче місце (умова, редактор, вхідні дані, результат)
+// і стан Python у верхній панелі. Тут лише малювання; запуск і збереження — в app.js.
+
+/** Створює елемент: h('p', { class: 'note' }, 'текст', інший елемент, …). */
+export function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs ?? {})) {
+    if (value === undefined || value === null || value === false) continue;
+    if (key.startsWith('on') && typeof value === 'function') el.addEventListener(key.slice(2).toLowerCase(), value);
+    else if (key === 'class') el.className = value;
+    else el.setAttribute(key, value === true ? '' : String(value));
+  }
+  for (const child of children.flat()) {
+    if (child === null || child === undefined || child === false) continue;
+    el.append(child instanceof Node ? child : String(child));
+  }
+  return el;
+}
+
+const STATUS_LABEL = { new: 'Не почато', started: 'В роботі', done: 'Виконано' };
+
+// ---------- Стан Python у верхній панелі ----------
+
+const PYTHON_TEXT = {
+  loading: 'Готуємо Python…',
+  ready: 'Python готовий',
+  failed: 'Python не завантажився',
+};
+
+export function showPythonStatus(status, details, onRetry) {
+  const root = document.documentElement;
+  // Для тестів і вимірів: <html data-python="ready" data-python-ready-ms="2300">
+  root.dataset.python = status;
+  if (details?.readyMs) root.dataset.pythonReadyMs = String(details.readyMs);
+  if (status === 'busy') return; // під час запуску стан показує панель кнопок, а не шапка
+
+  const box = document.getElementById('py-status');
+  box.replaceChildren(
+    h('span', { class: `py-status__dot py-status__dot--${status}`, 'aria-hidden': 'true' }),
+    h('span', {}, PYTHON_TEXT[status]),
+  );
+  if (status === 'failed') {
+    box.append(h('button', { class: 'btn btn--small', type: 'button', onClick: onRetry }, 'Спробувати ще'));
+  }
+  document.getElementById('py-progress').hidden = status !== 'loading';
+}
+
+export function setActiveNav(name) {
+  for (const link of document.querySelectorAll('[data-nav]')) {
+    if (link.dataset.nav === name) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+}
+
+export function renderFatal(main, message) {
+  main.replaceChildren(h('p', { class: 'notice notice--bad' }, message));
+}
+
+// ---------- Карта місій ----------
+
+function firstSentence(text) {
+  const match = text.match(/^.*?[.!?…](\s|$)/);
+  return match ? match[0].trim() : text;
+}
+
+export function renderMap(main, { topics, statusOf, storageWorks }) {
+  let number = 0;
+  main.replaceChildren(
+    h('div', { class: 'map' },
+      h('h1', { class: 'map__title', tabindex: '-1' }, 'Карта місій'),
+      h('p', { class: 'map__lead' }, 'Обери місію, прочитай історію, напиши програму й перевір її.'),
+      !storageWorks && h('p', { class: 'notice notice--warn' },
+        'Цей браузер не дає зберігати прогрес: код зникне, коли закриєш вкладку.'),
+      ...topics.map((topic) => h('section', { class: 'topic', 'aria-label': topic.title },
+        h('h2', { class: 'topic__title' }, topic.title),
+        h('ol', { class: 'topic__missions' },
+          ...topic.missions.map((mission) => {
+            number += 1;
+            const status = statusOf(mission.id);
+            return h('li', {},
+              h('a', { class: `mission-card mission-card--${status}`, href: `#/m/${mission.id}` },
+                h('span', { class: 'mission-card__number', 'aria-hidden': 'true' }, String(number)),
+                h('span', { class: 'mission-card__text' },
+                  h('span', { class: 'mission-card__title' }, mission.title),
+                  mission.story && h('span', { class: 'mission-card__story' }, firstSentence(mission.story))),
+                h('span', { class: `chip chip--${status}` }, STATUS_LABEL[status])));
+          })))),
+      h('a', { class: 'sandbox-card', href: '#/sandbox' },
+        h('span', { class: 'sandbox-card__title' }, 'Пісочниця'),
+        h('span', { class: 'sandbox-card__text' }, 'Вільний редактор без завдання: пробуй що завгодно.')),
+      h('p', { class: 'map__note' }, 'Прогрес зберігається лише в цьому браузері на цьому пристрої.'),
+    ),
+  );
+  main.querySelector('h1').focus({ preventScroll: true });
+}
+
+// ---------- Пояснення помилок ----------
+// Повний словник помилок українською з'явиться на етапі 2.
+
+function explainError(error, inCheck) {
+  if (error.type === 'EOFError') {
+    return inCheck
+      ? 'Програма просить більше вхідних даних, ніж є в тесті.'
+      : 'Програма просить більше вхідних даних, ніж їх задано в полі «Вхідні дані».';
+  }
+  if (error.type === 'TooMuchOutput') {
+    return 'Програма виводить забагато тексту. Можливо, print() стоїть у циклі, який не закінчується.';
+  }
+  return null;
+}
+
+function renderError(error, { inCheck = false } = {}) {
+  const explanation = explainError(error, inCheck);
+  return h('div', { class: 'problem' },
+    h('p', { class: 'problem__title' }, error.line ? `Помилка в рядку ${error.line}` : 'Помилка'),
+    explanation && h('p', { class: 'problem__text' }, explanation),
+    error.type !== 'TooMuchOutput' && h('p', { class: 'problem__original' },
+      error.message ? `${error.type}: ${error.message}` : error.type));
+}
+
+function renderProblem(title, text) {
+  return h('div', { class: 'problem' },
+    h('p', { class: 'problem__title' }, title),
+    text && h('p', { class: 'problem__text' }, text));
+}
+
+const timeoutProblem = (limitMs) => renderProblem(
+  'Програма працює надто довго — можливо, цикл не закінчується.',
+  `Ми зупинили її через ${Math.round(limitMs / 1000)} с. Виправ код і запусти знову.`);
+const crashProblem = () => renderProblem('Python несподівано зупинився.', 'Спробуй запустити ще раз.');
+const unavailableProblem = () => renderProblem(
+  'Python не завантажився.',
+  'Перевір інтернет і натисни «Спробувати ще» вгорі сторінки.');
+
+function formatMs(ms) {
+  return ms < 1000 ? `${ms} мс` : `${(ms / 1000).toFixed(1).replace('.', ',')} с`;
+}
+
+/** Вивід програми так, як у терміналі: текст, помилки, підказки input() і прочитані значення. */
+function renderTranscript(parts) {
+  return h('pre', { class: 'console' },
+    ...parts.map(([kind, text]) => (kind === 'out' ? text : h('span', { class: `console__${kind}` }, text))));
+}
+
+const block = (label, text, emptyText) => h('div', { class: 'io' },
+  h('p', { class: 'io__label' }, label),
+  text === '' ? h('p', { class: 'io__empty' }, emptyText) : h('pre', { class: 'io__text' }, text));
+
+// ---------- Робоче місце: місія або пісочниця ----------
+
+/**
+ * Малює робоче місце. mission = null — це пісочниця.
+ * Повертає об'єкт, через який app.js оновлює екран.
+ */
+export function renderWorkspace(main, { mission, status, stdin, timeLimitMs, onRun, onCheck, onStdinChange }) {
+  const editorHost = h('div', { class: 'editor' });
+
+  const stdinField = h('textarea', {
+    class: 'stdin__field',
+    id: 'stdin-field',
+    rows: '2',
+    autocomplete: 'off',
+    autocorrect: 'off',
+    autocapitalize: 'off',
+    spellcheck: 'false',
+    'aria-describedby': 'stdin-help',
+    onInput: (event) => onStdinChange(event.target.value),
+  });
+  stdinField.value = stdin;
+  const stdinBox = h('details', { class: 'stdin' },
+    h('summary', {}, 'Вхідні дані'),
+    h('label', { class: 'stdin__help', id: 'stdin-help', for: 'stdin-field' },
+      'Кожне значення — з нового рядка. Програма читає їх по черзі через input().'),
+    stdinField);
+
+  const runButton = h('button', { class: 'btn btn--run', type: 'button', 'aria-label': 'Запустити програму', onClick: onRun },
+    h('span', { 'aria-hidden': 'true' }, '▶'), 'Запустити');
+  const checkButton = mission && h('button', { class: 'btn btn--check', type: 'button', 'aria-label': 'Перевірити місію', onClick: onCheck },
+    h('span', { 'aria-hidden': 'true' }, '✓'), 'Перевірити');
+  const busyText = h('span', { class: 'toolbar__status', role: 'status' });
+
+  const emptyOutput = () => h('p', { class: 'output__empty' },
+    mission ? 'Натисни «Запустити», щоб побачити, що виводить програма, або «Перевірити», щоб здати місію.'
+      : 'Натисни «Запустити», і тут з\'явиться результат.');
+  const outputBody = h('div', { class: 'output__body', 'aria-live': 'polite' }, emptyOutput());
+  const output = h('section', { class: 'output', 'aria-labelledby': 'output-title' },
+    h('div', { class: 'output__head' },
+      h('h2', { class: 'output__title', id: 'output-title' }, 'Результат'),
+      h('button', { class: 'btn btn--ghost btn--small', type: 'button', 'aria-label': 'Очистити результат',
+        onClick: () => outputBody.replaceChildren(emptyOutput()) }, 'Очистити')),
+    outputBody);
+
+  // Після запуску чи перевірки показуємо результат, навіть якщо він нижче краю екрана.
+  const revealOutput = () => {
+    const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    output.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
+  };
+
+  const doneChip = h('span', { class: 'chip chip--done', hidden: status !== 'done' }, 'Виконано');
+  const taskPanel = mission && h('section', { class: 'task', 'aria-labelledby': 'task-title' },
+    h('p', { class: 'task__topic' }, mission.topic),
+    h('div', { class: 'task__heading' },
+      h('h1', { class: 'task__title', id: 'task-title', tabindex: '-1' }, mission.title),
+      doneChip),
+    mission.story && h('p', { class: 'task__story' }, mission.story),
+    h('p', { class: 'task__text' }, mission.task),
+    mission.example && h('div', { class: 'example' },
+      h('h2', { class: 'example__title' }, 'Приклад'),
+      h('div', { class: 'example__io' },
+        mission.example.input ? block('Вхідні дані', mission.example.input, '') : null,
+        block('Програма виводить', mission.example.output, '(нічого)'))),
+    h('p', { class: 'task__back' }, h('a', { href: '#/' }, 'До карти місій')));
+
+  const workPanel = h('section', { class: 'work', 'aria-label': 'Код і результат' },
+    !mission && h('h1', { class: 'work__title', tabindex: '-1' }, 'Пісочниця'),
+    h('div', { class: 'toolbar' }, runButton, checkButton, busyText),
+    editorHost,
+    stdinBox,
+    output);
+
+  main.replaceChildren(h('div', { class: mission ? 'workspace' : 'workspace workspace--sandbox' }, taskPanel, workPanel));
+  main.querySelector('h1').focus({ preventScroll: true });
+
+  let codeHasInput = null;
+
+  return {
+    editorHost,
+    getStdin: () => stdinField.value,
+
+    /** Поле «Вхідні дані» розгорнуте, лише якщо в коді є input(. */
+    codeChanged(code) {
+      const hasInput = /\binput\s*\(/.test(code);
+      if (hasInput !== codeHasInput) stdinBox.open = hasInput;
+      codeHasInput = hasInput;
+    },
+
+    setBusy(busy, text = '') {
+      runButton.disabled = busy;
+      if (checkButton) checkButton.disabled = busy;
+      busyText.textContent = busy ? text : '';
+    },
+
+    showRunResult(outcome) {
+      const nodes = [];
+      const result = outcome.results[0];
+      if (outcome.unavailable) {
+        nodes.push(unavailableProblem());
+      } else if (result) {
+        nodes.push(result.transcript.length > 0
+          ? renderTranscript(result.transcript)
+          : h('p', { class: 'output__nothing' }, 'Програма нічого не вивела.'));
+        if (result.error) nodes.push(renderError(result.error));
+        else nodes.push(h('p', { class: 'output__time' }, `Виконано за ${formatMs(result.timeMs)}`));
+      }
+      if (outcome.timedOutAt !== null) nodes.push(timeoutProblem(timeLimitMs));
+      if (outcome.crashed) nodes.push(crashProblem());
+      outputBody.replaceChildren(...nodes);
+      revealOutput();
+    },
+
+    /**
+     * Звіт перевірки. Якщо всі тести пройдено — запитання на розуміння (якщо є),
+     * а після правильної відповіді onSolved() і кнопка «Наступна місія».
+     */
+    showCheckReport(report, { outcome, question, onSolved, next }) {
+      if (outcome.unavailable) {
+        outputBody.replaceChildren(unavailableProblem());
+        revealOutput();
+        return;
+      }
+      const nodes = [];
+      if (report.passed) {
+        nodes.push(h('p', { class: 'verdict verdict--ok' }, `Усі тести пройдено: ${report.total} з ${report.total}.`));
+      } else {
+        nodes.push(h('p', { class: 'verdict verdict--bad' }, `Пройдено ${report.passedCount} з ${report.total} тестів.`));
+        nodes.push(renderFailure(report.failure, timeLimitMs));
+      }
+      outputBody.replaceChildren(...nodes);
+      if (!report.passed) {
+        revealOutput();
+        return;
+      }
+
+      const showSuccess = () => {
+        onSolved();
+        doneChip.hidden = false;
+        const success = h('div', { class: 'success' },
+          h('p', { class: 'success__title' }, 'Місію виконано!'),
+          next
+            ? h('a', { class: 'btn btn--run', href: next.href }, 'Наступна місія')
+            : h('a', { class: 'btn btn--check', href: '#/' }, 'До карти місій'),
+          next && h('p', { class: 'success__next' }, next.title));
+        const form = outputBody.querySelector('.question');
+        if (form) form.replaceWith(success);
+        else outputBody.append(success);
+        success.querySelector('.btn').focus({ preventScroll: false });
+      };
+      if (question) {
+        outputBody.append(renderQuestion(question, showSuccess));
+        revealOutput();
+      } else {
+        showSuccess();
+      }
+    },
+  };
+}
+
+function renderFailure(failure, timeLimitMs) {
+  if (failure.reason === 'timeout') return timeoutProblem(timeLimitMs);
+  if (failure.reason === 'crash') return crashProblem();
+  if (failure.hidden) {
+    return renderProblem('Прихований тест не пройдено.',
+      'Перевір, чи програма правильно працює з будь-якими вхідними даними, а не лише з прикладом.');
+  }
+  const title = h('p', { class: 'failure__title' }, `Тест ${failure.index + 1}`);
+  const input = block('Вхідні дані', failure.input, '(немає)');
+  if (failure.reason === 'error') {
+    return h('div', { class: 'failure' }, title, input, renderError(failure.error, { inCheck: true }));
+  }
+  return h('div', { class: 'failure' }, title, input,
+    block('Очікувалось', failure.expected, '(нічого)'),
+    block('Твоя програма вивела', failure.actual, '(нічого)'));
+}
+
+let questionCounter = 0;
+
+function renderQuestion(question, onCorrect) {
+  questionCounter += 1;
+  const name = `question-${questionCounter}`;
+  const feedback = h('p', { class: 'question__feedback', 'aria-live': 'polite' });
+  const form = h('form', {
+    class: 'question',
+    onSubmit: (event) => {
+      event.preventDefault();
+      const chosen = form.querySelector('input:checked');
+      if (!chosen) feedback.textContent = 'Обери одну відповідь.';
+      else if (Number(chosen.value) === question.answer) onCorrect();
+      else feedback.textContent = 'Ні, подумай ще раз.';
+    },
+  },
+  h('fieldset', { class: 'question__set' },
+    h('legend', { class: 'question__text' }, question.text),
+    ...question.options.map((option, i) => h('label', { class: 'question__option' },
+      h('input', { type: 'radio', name, value: String(i) }),
+      h('span', {}, option)))),
+  h('button', { class: 'btn btn--check', type: 'submit' }, 'Відповісти'),
+  feedback);
+  return form;
+}
