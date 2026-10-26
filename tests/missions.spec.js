@@ -18,6 +18,9 @@ for (const id of missionIds) {
 
   test(`${id}: стартовий шаблон не зараховується`, async ({ page }) => {
     await openApp(page, `#/m/${id}`);
+    // Над завданням — відкритий блок «Як це працює».
+    await expect(page.locator('details.learn')).toHaveAttribute('open', '');
+    await expect(page.locator('.learn__title')).toHaveText(mission.learn.title);
     await checkButton(page).click();
     await expect(page.locator('.verdict--bad')).toBeVisible();
     await expect(page.getByText('Місію виконано!')).toHaveCount(0);

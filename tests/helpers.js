@@ -9,13 +9,13 @@ export async function openApp(page, hash = '#/') {
 }
 
 /**
- * Замінює весь код у редакторі — як вставлення з буфера, без автовідступу.
+ * Замінює весь код у редакторі програми (не в прикладі «Як це працює») — як вставлення з буфера, без автовідступу.
  * Доступ до редактора беремо з того самого vendor/codemirror.js, що й сайт.
  */
 export async function setCode(page, code) {
   await page.evaluate(async (text) => {
     const { EditorView } = await import(new URL('vendor/codemirror.js', document.baseURI).href);
-    const view = EditorView.findFromDOM(document.querySelector('.cm-editor'));
+    const view = EditorView.findFromDOM(document.querySelector('.work .cm-editor'));
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
   }, code);
 }

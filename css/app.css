@@ -676,6 +676,122 @@ pre {
   color: var(--ink-muted);
 }
 
+/* «Як це працює»: пояснення теми з прикладом, який можна запустити */
+.learn {
+  margin: 4px 0 20px;
+  padding: 4px 16px 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+}
+
+.learn__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-height: var(--tap);
+  padding-top: 12px;
+  cursor: pointer;
+}
+
+.learn__label {
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.learn__title {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.learn__text {
+  margin: 8px 0 12px;
+  line-height: 1.55;
+}
+
+.learn__note {
+  margin: 0 0 8px;
+  color: var(--ink-muted);
+  font-size: 15px;
+}
+
+/* Приклад короткий: редактор росте разом із кодом, а не займає пів екрана */
+.editor.editor--example {
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+
+.editor.editor--example .cm-editor {
+  height: auto;
+}
+
+.learn__input {
+  margin-top: 10px;
+}
+
+.learn__actions {
+  margin: 10px 0;
+}
+
+.learn__output:empty {
+  display: none;
+}
+
+.learn__lines {
+  margin: 16px 0 0;
+}
+
+.learn__lines dt {
+  margin-top: 10px;
+}
+
+.learn__lines code,
+.learn__indent code {
+  font-family: var(--font-code);
+  font-size: 15px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.learn__lines dd {
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+
+.learn__subtitle {
+  margin: 16px 0 4px;
+  font-size: 17px;
+}
+
+.learn__indent p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* Підказки під редактором — по одній */
+.hints__list {
+  margin: 0 0 8px;
+  padding: 10px 16px 10px 36px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-bg);
+  line-height: 1.5;
+}
+
+.hints__list:empty {
+  display: none;
+}
+
+.hints__list li + li {
+  margin-top: 6px;
+}
+
 .task__text {
   margin: 0 0 16px;
   font-size: 18px;

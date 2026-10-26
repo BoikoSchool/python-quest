@@ -6,6 +6,8 @@
 // Що перевіряється:
 //   • missions/index.json і файли місій узгоджені між собою;
 //   • обов'язкові поля й типи, тести (щонайменше 3, хоча б один прихований), запитання, підказки;
+//   • пояснення learn: є, приклад запускається без помилок і НЕ проходить тести місії
+//     (приклад має навчити, а не бути готовим розв'язком);
 //   • еталонний розв'язок missions/solutions/<id>.py проходить усі тести й приклад;
 //   • стартовий шаблон НЕ проходить тести.
 // Python запускається тим самим кодом, що й на сайті (js/py-worker.js, js/checker.js).
@@ -24,8 +26,60 @@ const checkSolutions = !process.argv.includes('--no-solutions');
 
 const KNOWN_FIELDS = new Set([
   'id', 'title', 'topic', 'level', 'story', 'task', 'example', 'starter',
-  'tests', 'hints', 'question', 'skills', 'timeLimitMs',
+  'tests', 'hints', 'question', 'skills', 'timeLimitMs', 'learn',
 ]);
+const LEARN_FIELDS = new Set(['title', 'text', 'code', 'input', 'lines', 'indent']);
+
+const countSentences = (text) => text.split(/(?<=[.!?…])\s+/).filter(Boolean).length;
+
+/** Рядки коду, що відкривають блок (if, for, while, def…): закінчуються на «:». */
+const hasBlock = (code) => code.split('\n').some((line) => line.replace(/#.*$/, '').trimEnd().endsWith(':'));
+
+/** Перевіряє поле learn. Помилки й попередження додає в errors і warnings. */
+function checkLearn(learn, errors, warnings) {
+  if (learn === undefined) {
+    errors.push('поле learn обов\'язкове: пояснення теми з прикладом');
+    return;
+  }
+  if (typeof learn !== 'object' || learn === null || Array.isArray(learn)) {
+    errors.push('learn має бути { "title", "text", "code", "lines", … }');
+    return;
+  }
+  for (const key of Object.keys(learn)) {
+    if (!LEARN_FIELDS.has(key)) warnings.push(`learn: невідоме поле «${key}» (можливо, одрук?)`);
+  }
+  if (!isText(learn.title)) errors.push('learn.title обов\'язковий');
+  if (!isText(learn.text)) {
+    errors.push('learn.text обов\'язковий');
+  } else {
+    const sentences = countSentences(learn.text);
+    if (sentences < 2 || sentences > 5) warnings.push(`у learn.text ${sentences} речень — радимо 2–5`);
+  }
+  if (!isText(learn.code)) {
+    errors.push('learn.code обов\'язковий: приклад коду');
+    return;
+  }
+  if (learn.input !== undefined && !isString(learn.input)) errors.push('learn.input має бути рядком');
+  if (/\binput\s*\(/.test(learn.code) && learn.input === undefined) {
+    errors.push('приклад читає input(), тож потрібне learn.input — вхідні дані для нього');
+  }
+
+  const codeLines = new Set(learn.code.split('\n').map((line) => line.trim()));
+  if (!Array.isArray(learn.lines) || learn.lines.length === 0) {
+    errors.push('learn.lines: потрібне пояснення хоча б одного рядка прикладу');
+  } else {
+    learn.lines.forEach((line, i) => {
+      if (!isText(line?.code) || !isText(line?.text)) {
+        errors.push(`learn.lines[${i}]: потрібні поля code і text`);
+      } else if (!codeLines.has(line.code.trim())) {
+        errors.push(`learn.lines[${i}]: рядка «${line.code}» немає в прикладі`);
+      }
+    });
+  }
+  if (hasBlock(learn.code) && !isText(learn.indent)) {
+    errors.push('у прикладі є блок (рядок із «:»), тож потрібне learn.indent — пояснення відступів');
+  }
+}
 
 const isText = (value) => typeof value === 'string' && value.trim() !== '';
 const isString = (value) => typeof value === 'string';
@@ -60,7 +114,7 @@ function checkFields(mission, fileId, topicByMission) {
     if (!isText(mission.story)) {
       errors.push('story має бути непорожнім рядком');
     } else {
-      const sentences = mission.story.split(/(?<=[.!?…])\s+/).filter(Boolean).length;
+      const sentences = countSentences(mission.story);
       if (sentences > 2) warnings.push(`у story ${sentences} речення — радимо не більше 2`);
     }
   }
@@ -108,6 +162,7 @@ function checkFields(mission, fileId, topicByMission) {
   if (mission.skills !== undefined && !(Array.isArray(mission.skills) && mission.skills.every(isText))) {
     errors.push('skills має бути списком рядків');
   }
+  checkLearn(mission.learn, errors, warnings);
   if (mission.timeLimitMs !== undefined
     && !(typeof mission.timeLimitMs === 'number' && mission.timeLimitMs >= 100 && mission.timeLimitMs <= 30000)) {
     errors.push('timeLimitMs має бути числом від 100 до 30000');
@@ -203,6 +258,16 @@ if (python) {
       const starter = evaluateTests(mission.tests, { results: runAll(python, mission.starter, inputs), timedOutAt: null, crashed: false });
       if (starter.passed) report.errors.push('стартовий шаблон уже проходить усі тести — учневі нічого робити');
       else report.notes.push(`шаблон не проходить (${starter.passedCount}/${starter.total})`);
+
+      // Приклад із learn: має працювати, але не розв'язувати місію.
+      const [example] = runAll(python, mission.learn.code, [mission.learn.input ?? '']);
+      if (example.error) {
+        const { type, line, message } = example.error;
+        report.errors.push(`приклад із learn падає: ${type}${line ? ` у рядку ${line}` : ''}${message ? ` — ${message}` : ''}`);
+      }
+      const learnTests = evaluateTests(mission.tests, { results: runAll(python, mission.learn.code, inputs), timedOutAt: null, crashed: false });
+      if (learnTests.passed) report.errors.push('приклад із learn проходить усі тести місії — це готовий розв\'язок');
+      else report.notes.push(`приклад не проходить (${learnTests.passedCount}/${learnTests.total})`);
 
       if (!checkSolutions) continue;
       const solutionFile = join(solutionsDir, `${mission.id}.py`);

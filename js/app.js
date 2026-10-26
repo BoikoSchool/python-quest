@@ -63,12 +63,13 @@ try {
 
 // 4. Запуск і перевірка коду.
 
-async function runCode(view, editor, { stdin, timeLimitMs }) {
+/** Один запуск коду з editor. show(outcome) показує результат (за замовчуванням — у «Результаті»). */
+async function runCode(view, editor, { stdin, timeLimitMs, show = view.showRunResult }) {
   editor.clearErrorLine();
   view.setBusy(true, runner.status === 'ready' ? 'Виконується…' : 'Чекаємо, поки Python буде готовий…');
   const outcome = await runner.run(editor.getCode(), [stdin], { timeLimitMs });
   view.setBusy(false);
-  view.showRunResult(outcome);
+  show(outcome);
   const line = outcome.results[0]?.error?.line;
   if (line) editor.showErrorLine(line);
 }
@@ -123,6 +124,8 @@ function openMission(mission) {
     status: storage.getMissionStatus(mission.id),
     stdin: saved?.stdin ?? mission.example?.input ?? '',
     timeLimitMs,
+    learnOpen: storage.isLearnOpen(mission.id),
+    onLearnToggle: (open) => storage.saveLearnOpen(mission.id, open),
     onStdinChange: (stdin) => storage.saveMissionWork(mission.id, { stdin }),
     onRun: () => {
       storage.saveMissionWork(mission.id, { code: editor.getCode(), stdin: view.getStdin() });
@@ -132,6 +135,16 @@ function openMission(mission) {
       storage.saveMissionWork(mission.id, { code: editor.getCode() });
       checkMission(view, editor, mission);
     },
+    // Приклад з «Як це працює». Його зміни не зберігаємо: після оновлення сторінки він знову як був.
+    onTryExample: () => runCode(view, exampleEditor, {
+      stdin: view.getExampleInput(),
+      timeLimitMs: DEFAULT_TIME_LIMIT_MS,
+      show: (outcome) => view.showExampleResult(outcome, DEFAULT_TIME_LIMIT_MS),
+    }),
+  });
+  const exampleEditor = mission.learn && createEditor(view.learnEditorHost, {
+    doc: mission.learn.code,
+    label: `Приклад: ${mission.learn.title}`,
   });
   const editor = createEditor(view.editorHost, {
     doc: code,
@@ -142,7 +155,10 @@ function openMission(mission) {
     },
   });
   view.codeChanged(code);
-  leaveScreen = () => editor.destroy();
+  leaveScreen = () => {
+    editor.destroy();
+    exampleEditor?.destroy();
+  };
 }
 
 function openSandbox() {

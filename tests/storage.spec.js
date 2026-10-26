@@ -9,7 +9,7 @@ test('код місії зберігається, а на карті вона «
   await setCode(page, 'price = int(input())\ncount = int(input())\n# моя чернетка\n');
   await page.waitForTimeout(800); // автозбереження спрацьовує через 500 мс
   await page.reload();
-  await expect(page.locator('.cm-content')).toContainText('# моя чернетка');
+  await expect(page.locator('.work .cm-content')).toContainText('# моя чернетка');
 
   await page.goto('./#/');
   await expect(page.locator('a[href="#/m/excursion-price"]')).toContainText('В роботі');

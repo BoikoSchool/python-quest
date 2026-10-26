@@ -244,23 +244,105 @@ const block = (label, text, emptyText) => h('div', { class: 'io' },
   h('p', { class: 'io__label' }, label),
   text === '' ? h('p', { class: 'io__empty' }, emptyText) : h('pre', { class: 'io__text' }, text));
 
+/** Що показати після одного запуску: вивід, помилку чи пояснення, чому програму зупинено. */
+function renderRunOutcome(outcome, timeLimitMs) {
+  const nodes = [];
+  const result = outcome.results[0];
+  if (outcome.unavailable) {
+    nodes.push(unavailableProblem());
+  } else if (result) {
+    nodes.push(result.transcript.length > 0
+      ? renderTranscript(result.transcript)
+      : h('p', { class: 'output__nothing' }, 'Програма нічого не вивела.'));
+    if (result.error) nodes.push(renderError(result.error));
+    else nodes.push(h('p', { class: 'output__time' }, `Виконано за ${formatMs(result.timeMs)}`));
+  }
+  if (outcome.timedOutAt !== null) nodes.push(timeoutProblem(timeLimitMs));
+  if (outcome.crashed) nodes.push(crashProblem());
+  return nodes;
+}
+
+const textArea = (attrs) => h('textarea', {
+  rows: '2', autocomplete: 'off', autocorrect: 'off', autocapitalize: 'off', spellcheck: 'false', ...attrs,
+});
+
+// ---------- «Як це працює»: пояснення теми з прикладом, який можна запустити ----------
+
+/**
+ * Блок над завданням місії (поле learn). open — розгорнутий чи згорнутий спочатку;
+ * onToggle(open) — учень сам розгорнув чи згорнув блок.
+ * Редактор для прикладу створює app.js у editorHost; «Спробувати» викликає onTry().
+ */
+function renderLearn(learn, { open, onTry, onToggle }) {
+  const editorHost = h('div', { class: 'editor editor--example' });
+  const inputField = learn.input === undefined ? null
+    : textArea({ class: 'stdin__field', id: 'learn-input' });
+  if (inputField) inputField.value = learn.input;
+  const tryButton = h('button', { class: 'btn btn--run btn--small', type: 'button', 'aria-label': 'Спробувати приклад', onClick: onTry },
+    h('span', { 'aria-hidden': 'true' }, '▶'), 'Спробувати');
+  const output = h('div', { class: 'learn__output', 'aria-live': 'polite' });
+
+  const box = h('details', { class: 'learn', open },
+    h('summary', { class: 'learn__summary' },
+      h('span', { class: 'learn__label' }, 'Як це працює'),
+      h('span', { class: 'learn__title' }, learn.title)),
+    h('p', { class: 'learn__text' }, learn.text),
+    h('p', { class: 'learn__note' }, 'Приклад можна змінювати. Натисни «Спробувати» й подивись, що вийде.'),
+    editorHost,
+    inputField && h('div', { class: 'learn__input' },
+      h('label', { class: 'stdin__help', for: 'learn-input' }, 'Вхідні дані для прикладу'),
+      inputField),
+    h('div', { class: 'learn__actions' }, tryButton),
+    output,
+    learn.lines?.length > 0 && h('dl', { class: 'learn__lines' },
+      ...learn.lines.flatMap((line) => [h('dt', {}, h('code', {}, line.code)), h('dd', {}, line.text)])),
+    learn.indent && h('div', { class: 'learn__indent' },
+      h('h3', { class: 'learn__subtitle' }, 'Відступи'),
+      h('p', {}, learn.indent)));
+
+  // Браузер надсилає toggle і тоді, коли блок відкрито під час малювання, — таке пропускаємо.
+  let shownOpen = open;
+  box.addEventListener('toggle', () => {
+    if (box.open === shownOpen) return;
+    shownOpen = box.open;
+    onToggle(shownOpen);
+  });
+
+  return { box, editorHost, tryButton, output, getInput: () => inputField?.value ?? '' };
+}
+
+// ---------- Підказки: по одній, коли учень сам попросить ----------
+
+function renderHints(hints) {
+  let shown = 0;
+  const list = h('ol', { class: 'hints__list', 'aria-live': 'polite' });
+  const button = h('button', { class: 'btn btn--ghost btn--small', type: 'button' }, 'Не виходить? Підказка');
+  button.addEventListener('click', () => {
+    list.append(h('li', {}, hints[shown]));
+    shown += 1;
+    if (shown === hints.length) button.hidden = true;
+    else button.textContent = `Ще підказка (${shown + 1} з ${hints.length})`;
+  });
+  return h('div', { class: 'hints' }, list, button);
+}
+
 // ---------- Робоче місце: місія або пісочниця ----------
 
 /**
  * Малює робоче місце. mission = null — це пісочниця.
  * Повертає об'єкт, через який app.js оновлює екран.
  */
-export function renderWorkspace(main, { mission, status, stdin, timeLimitMs, onRun, onCheck, onStdinChange }) {
+export function renderWorkspace(main, {
+  mission, status, stdin, timeLimitMs, learnOpen, onRun, onCheck, onStdinChange, onTryExample, onLearnToggle,
+}) {
   const editorHost = h('div', { class: 'editor' });
+  const learn = mission?.learn
+    ? renderLearn(mission.learn, { open: learnOpen, onTry: onTryExample, onToggle: onLearnToggle })
+    : null;
 
-  const stdinField = h('textarea', {
+  const stdinField = textArea({
     class: 'stdin__field',
     id: 'stdin-field',
-    rows: '2',
-    autocomplete: 'off',
-    autocorrect: 'off',
-    autocapitalize: 'off',
-    spellcheck: 'false',
     'aria-describedby': 'stdin-help',
     onInput: (event) => onStdinChange(event.target.value),
   });
@@ -301,6 +383,8 @@ export function renderWorkspace(main, { mission, status, stdin, timeLimitMs, onR
       h('h1', { class: 'task__title', id: 'task-title', tabindex: '-1' }, mission.title),
       doneChip),
     mission.story && h('p', { class: 'task__story' }, mission.story),
+    learn?.box,
+    learn && h('h2', { class: 'example__title' }, 'Твоє завдання'),
     h('p', { class: 'task__text' }, mission.task),
     mission.example && h('div', { class: 'example' },
       h('h2', { class: 'example__title' }, 'Приклад'),
@@ -313,6 +397,7 @@ export function renderWorkspace(main, { mission, status, stdin, timeLimitMs, onR
     !mission && h('h1', { class: 'work__title', tabindex: '-1' }, 'Пісочниця'),
     h('div', { class: 'toolbar' }, runButton, checkButton, busyText),
     editorHost,
+    mission?.hints?.length > 0 && renderHints(mission.hints),
     stdinBox,
     output);
 
@@ -324,6 +409,8 @@ export function renderWorkspace(main, { mission, status, stdin, timeLimitMs, onR
   return {
     editorHost,
     getStdin: () => stdinField.value,
+    learnEditorHost: learn?.editorHost ?? null,
+    getExampleInput: () => learn?.getInput() ?? '',
 
     /** Поле «Вхідні дані» розгорнуте, лише якщо в коді є input(. */
     codeChanged(code) {
@@ -335,25 +422,18 @@ export function renderWorkspace(main, { mission, status, stdin, timeLimitMs, onR
     setBusy(busy, text = '') {
       runButton.disabled = busy;
       if (checkButton) checkButton.disabled = busy;
+      if (learn) learn.tryButton.disabled = busy;
       busyText.textContent = busy ? text : '';
     },
 
     showRunResult(outcome) {
-      const nodes = [];
-      const result = outcome.results[0];
-      if (outcome.unavailable) {
-        nodes.push(unavailableProblem());
-      } else if (result) {
-        nodes.push(result.transcript.length > 0
-          ? renderTranscript(result.transcript)
-          : h('p', { class: 'output__nothing' }, 'Програма нічого не вивела.'));
-        if (result.error) nodes.push(renderError(result.error));
-        else nodes.push(h('p', { class: 'output__time' }, `Виконано за ${formatMs(result.timeMs)}`));
-      }
-      if (outcome.timedOutAt !== null) nodes.push(timeoutProblem(timeLimitMs));
-      if (outcome.crashed) nodes.push(crashProblem());
-      outputBody.replaceChildren(...nodes);
+      outputBody.replaceChildren(...renderRunOutcome(outcome, timeLimitMs));
       revealOutput();
+    },
+
+    /** Результат прикладу з «Як це працює» — під самим прикладом. */
+    showExampleResult(outcome, exampleTimeLimitMs) {
+      learn.output.replaceChildren(...renderRunOutcome(outcome, exampleTimeLimitMs));
     },
 
     /**

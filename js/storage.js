@@ -6,7 +6,8 @@
 // Що зберігаємо:
 //   missions: { [id]: { code, stdin, status: 'started' | 'done', updatedAt } }
 //   sandbox:  { code, stdin }
-//   settings: { homeHintClosed }  — лише для цього пристрою, в експорт не потрапляють
+//   settings: { homeHintClosed, learnOpen: { [id]: true | false } }
+//             — лише для цього пристрою, в експорт не потрапляють
 //
 // Файл експорту: { app: 'python-quest', schema: 1, exportedAt, missions, sandbox }.
 
@@ -128,6 +129,18 @@ export function getSetting(name) {
 export function saveSetting(name, value) {
   state.settings[name] = value;
   writeNow();
+}
+
+/**
+ * Чи розгорнутий блок «Як це працює» в місії. Якщо учень сам його не згортав і не розгортав:
+ * у виконаній місії — згорнутий, в інших — розгорнутий.
+ */
+export function isLearnOpen(id) {
+  return state.settings.learnOpen?.[id] ?? getMissionStatus(id) !== 'done';
+}
+
+export function saveLearnOpen(id, open) {
+  saveSetting('learnOpen', { ...state.settings.learnOpen, [id]: open });
 }
 
 // ---------- Експорт, імпорт, скидання ----------

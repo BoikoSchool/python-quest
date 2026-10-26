@@ -7,7 +7,7 @@ import { openApp, runButton, setCode } from './helpers.js';
 async function editorText(page) {
   return page.evaluate(async () => {
     const { EditorView } = await import(new URL('vendor/codemirror.js', document.baseURI).href);
-    return EditorView.findFromDOM(document.querySelector('.cm-editor')).state.doc.toString();
+    return EditorView.findFromDOM(document.querySelector('.work .cm-editor')).state.doc.toString();
   });
 }
 
@@ -24,7 +24,7 @@ test('вставлений текст з ‘ ’ і тире теж виправ
   await openApp(page, '#/sandbox');
   await page.evaluate(async () => {
     const { EditorView } = await import(new URL('vendor/codemirror.js', document.baseURI).href);
-    const view = EditorView.findFromDOM(document.querySelector('.cm-editor'));
+    const view = EditorView.findFromDOM(document.querySelector('.work .cm-editor'));
     view.dispatch({ changes: { from: 0, insert: 'print(‘«Так»’, 5 – 2 — 1)' }, userEvent: 'input.paste' });
   });
   expect(await editorText(page)).toBe('print(\'«Так»\', 5 - 2 - 1)');
