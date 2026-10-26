@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Іконка Python Quest: запрошення командного рядка «>_» у кольорах Python.
+       Малюнок у центральних 80 %, тож Android може обрізати іконку кругом чи квадратом. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3a74c4"/>
+      <stop offset="1" stop-color="#1b3a6e"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <path d="M146 166 L246 256 L146 346" fill="none" stroke="#ffd43b" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M286 346 H374" fill="none" stroke="#ffffff" stroke-width="46" stroke-linecap="round"/>
+</svg>

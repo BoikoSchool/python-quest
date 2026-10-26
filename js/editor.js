@@ -1,5 +1,5 @@
 // Редактор коду — обгортка над CodeMirror 6 (файл vendor/codemirror.js).
-// Панель символів для екранної клавіатури з'явиться на етапі 2.
+// Панель символів для екранної клавіатури відкладено (див. docs/SPEC.md, п. 3.1).
 
 import {
   Decoration,
@@ -80,6 +80,32 @@ const errorLine = StateField.define({
   provide: (field) => EditorView.decorations.from(field),
 });
 
+// iPad сам перетворює " на “ ”, ' на ‘ ’ і -- на —, а Python таких символів не розуміє (SyntaxError).
+// Тому все, що учень набирає чи вставляє, виправляємо на звичайні лапки й мінус.
+// Ялинки « » не чіпаємо: їх свідомо пишуть у рядках українською.
+const PLAIN_SYMBOL = {
+  '“': '"', '”': '"', '„': '"', '″': '"',
+  '‘': "'", '’': "'", '‚': "'", '′': "'",
+  '–': '-', '—': '-',
+};
+const SMART_SYMBOLS = /[“”„″‘’‚′–—]/g;
+
+// Кожен символ замінюється рівно одним, тож курсор і виділення лишаються на своїх місцях.
+const plainQuotes = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged || !tr.isUserEvent('input')) return tr;
+  const fixes = [];
+  tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+    const text = inserted.toString();
+    for (const match of text.matchAll(SMART_SYMBOLS)) {
+      const at = fromB + match.index;
+      fixes.push({ from: at, to: at + 1, insert: PLAIN_SYMBOL[match[0]] });
+    }
+  });
+  if (fixes.length === 0) return tr;
+  // sequential: ці виправлення застосовуються до тексту вже після вставлення.
+  return [tr, { changes: fixes, sequential: true }];
+});
+
 /**
  * Створює редактор у parent.
  * onChange(code) викликається після кожної зміни тексту.
@@ -104,6 +130,7 @@ export function createEditor(parent, { doc = '', onChange = () => {}, label = '�
         syntaxHighlighting(pythonColors),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         errorLine,
+        plainQuotes,
         editorLook,
         placeholderText ? placeholder(placeholderText) : [],
         // Без цього iPad робить з print → Print і підкреслює код як орфографічні помилки.

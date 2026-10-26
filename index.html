@@ -8,8 +8,13 @@
   <meta name="theme-color" content="#0b1630" media="(prefers-color-scheme: dark)">
   <meta name="description" content="Python Quest — тренажер Python для учнів 5–9 класів. Працює просто в браузері планшета.">
   <title>Python Quest</title>
-  <!-- Іконки з'являться на етапі 3; порожня іконка прибирає зайвий запит favicon.ico. -->
-  <link rel="icon" href="data:,">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <meta name="apple-mobile-web-app-title" content="Python Quest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes"> <!-- iPadOS 16: відкривати з головного екрана без панелі Safari -->
   <link rel="stylesheet" href="css/app.css">
   <script type="module" src="js/app.js"></script>
 </head>
@@ -19,6 +24,7 @@
     <nav class="topbar__nav" aria-label="Розділи">
       <a class="topbar__link" href="#/" data-nav="map">Карта</a>
       <a class="topbar__link" href="#/sandbox" data-nav="sandbox">Пісочниця</a>
+      <a class="topbar__link" href="#/settings" data-nav="settings">Налаштування</a>
     </nav>
     <div class="py-status" id="py-status" role="status" aria-live="polite">
       <span class="py-status__dot py-status__dot--loading" aria-hidden="true"></span>

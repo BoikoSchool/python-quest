@@ -2,10 +2,14 @@
 // так само, як GitHub Pages (сайт у підпапці, без особливих заголовків).
 // Тож тести одразу помітять абсолютний шлях на кшталт "/js/app.js".
 //
+// Одна відмінність: у sw.js замість версії 'dev' підставляється версія з cookie pq-sw
+// (без cookie — 'test'), як це робить GitHub Actions під час публікації. Так тести перевіряють
+// справжню стратегію кешу, а тест оновлення може «випустити» нову версію лише для себе.
+//
 //   node tests/server.mjs [порт]      → http://localhost:4173/python-quest/
 
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,6 +48,13 @@ createServer(async (request, response) => {
   }
   if (relative === '' || relative.endsWith('/')) relative += 'index.html';
   const file = normalize(join(root, relative));
+  if (relative === 'sw.js') {
+    const version = request.headers.cookie?.match(/(?:^|;\s*)pq-sw=([\w-]+)/)?.[1] ?? 'test';
+    const body = (await readFile(file, 'utf8')).replace("const VERSION = 'dev';", `const VERSION = '${version}';`);
+    response.writeHead(200, { 'Content-Type': TYPES['.js'], 'Cache-Control': 'max-age=600' });
+    response.end(body);
+    return;
+  }
   try {
     if (!file.startsWith(root)) throw new Error('поза папкою сайту');
     const info = await stat(file);

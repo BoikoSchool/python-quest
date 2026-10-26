@@ -3,6 +3,22 @@
     {
       "title": "Перші кроки",
       "missions": ["radio-hello", "excursion-price", "eco-grams"]
+    },
+    {
+      "title": "Умови",
+      "missions": ["ride-height", "weather-station"]
+    },
+    {
+      "title": "Цикли",
+      "missions": ["space-countdown", "piggy-bank"]
+    },
+    {
+      "title": "Рядки і списки",
+      "missions": ["scout-cipher", "school-olympiad"]
+    },
+    {
+      "title": "Функції",
+      "missions": ["ticket-office"]
     }
   ]
 }

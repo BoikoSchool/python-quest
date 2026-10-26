@@ -1,0 +1,29 @@
+{
+  "id": "piggy-bank",
+  "title": "Скарбничка",
+  "topic": "Цикли",
+  "level": 3,
+  "story": "Оля збирає на велосипед і щотижня кладе в скарбничку однакову суму. Скільки тижнів їй чекати?",
+  "task": "Прочитай два цілі числа: ціну покупки й суму, яку Оля кладе щотижня (вона більша за 0). Виведи, скільки тижнів треба відкладати, щоб назбирати не менше за ціну.",
+  "example": { "input": "100\n30", "output": "4" },
+  "starter": "price = int(input())\nweekly = int(input())\nsaved = 0\nweeks = 0\n# поки грошей менше, ніж ціна, минає ще один тиждень\nprint(weeks)\n",
+  "tests": [
+    { "input": "100\n30", "output": "4" },
+    { "input": "90\n30", "output": "3" },
+    { "input": "0\n50", "output": "0" },
+    { "input": "1000\n1", "output": "1000", "hidden": true },
+    { "input": "5\n10", "output": "1", "hidden": true }
+  ],
+  "hints": [
+    "Цикл while повторюється, поки умова правдива: while saved < price:",
+    "Усередині циклу додай weekly до saved, а 1 — до weeks.",
+    "print(weeks) пиши після циклу, без відступу."
+  ],
+  "question": {
+    "text": "Коли зупиниться цикл while saved < price?",
+    "options": ["Коли saved стане не меншим за price", "Рівно після 10 повторень", "Коли weeks дорівнюватиме price"],
+    "answer": 0
+  },
+  "skills": ["while", "+="],
+  "timeLimitMs": 5000
+}

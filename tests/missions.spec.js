@@ -30,7 +30,7 @@ for (const id of missionIds) {
     await checkButton(page).click();
     await expect(page.locator('.verdict--ok')).toHaveText(`Усі тести пройдено: ${mission.tests.length} з ${mission.tests.length}.`);
     if (mission.question) {
-      await page.getByLabel(mission.question.options[mission.question.answer]).check();
+      await page.getByLabel(mission.question.options[mission.question.answer], { exact: true }).check();
       await page.getByRole('button', { name: 'Відповісти' }).click();
     }
     await expect(page.getByText('Місію виконано!')).toBeVisible();

@@ -1,0 +1,29 @@
+{
+  "id": "ticket-office",
+  "title": "Квиткова каса",
+  "topic": "Функції",
+  "level": 5,
+  "story": "Каса планетарію продає квитки. Хто молодший за 18 років, платить пів ціни.",
+  "task": "Допиши функцію price_for(price, age). Вона повертає пів ціни (price // 2), якщо вік менший за 18, і повну ціну в інших випадках. Решта програми вже читає ціну й вік і виводить відповідь функції.",
+  "example": { "input": "100\n12", "output": "50" },
+  "starter": "def price_for(price, age):\n    # поверни ціну зі знижкою або повну ціну\n    return price\n\n\nprice = int(input())\nage = int(input())\nprint(price_for(price, age))\n",
+  "tests": [
+    { "input": "100\n12", "output": "50" },
+    { "input": "100\n18", "output": "100" },
+    { "input": "100\n17", "output": "50", "hidden": true },
+    { "input": "80\n0", "output": "40", "hidden": true },
+    { "input": "75\n10", "output": "37", "hidden": true }
+  ],
+  "hints": [
+    "Усередині функції потрібна умова: if age < 18:",
+    "Для учня — return price // 2, інакше — return price.",
+    "return повертає значення з функції, а print() показує його на екрані."
+  ],
+  "question": {
+    "text": "Що робить return у функції?",
+    "options": ["Повертає значення туди, де функцію викликали", "Виводить текст на екран", "Зупиняє всю програму"],
+    "answer": 0
+  },
+  "skills": ["def", "return", "if"],
+  "timeLimitMs": 5000
+}

@@ -17,7 +17,8 @@ export const DEFAULT_TIME_LIMIT_MS = 5000;
  * Про кожну зміну стану повідомляє onStatus(status, details).
  */
 export class PythonRunner {
-  constructor({ onStatus = () => {} } = {}) {
+  /** startAfter — проміс, після якого створюється worker (див. js/offline.js). */
+  constructor({ onStatus = () => {}, startAfter = null } = {}) {
     this.onStatus = onStatus;
     this.status = 'loading';
     this.version = null;
@@ -26,7 +27,8 @@ export class PythonRunner {
     this.nextId = 1;
     this.current = null; // поточний запуск
     this.readyWaiters = [];
-    this.start();
+    this.setStatus('loading');
+    Promise.resolve(startAfter).catch(() => {}).then(() => this.start());
   }
 
   setStatus(status, details = {}) {

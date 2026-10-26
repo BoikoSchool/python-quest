@@ -4,24 +4,37 @@
 //   #/            карта місій
 //   #/m/<id>      місія
 //   #/sandbox     пісочниця
+//   #/settings    налаштування: прогрес у файл і назад
 // Адреси з # не потребують налаштувань сервера, тож працюють на GitHub Pages.
 
 import { DEFAULT_TIME_LIMIT_MS, PythonRunner } from './runner.js';
 import { createEditor } from './editor.js';
 import { evaluateTests } from './checker.js';
+import { keepPythonOffline, shouldSuggestHomeScreen, startOffline } from './offline.js';
 import * as storage from './storage.js';
 import * as ui from './ui.js';
 
 const MISSIONS_URL = new URL('../missions/', import.meta.url);
 const main = document.getElementById('main');
 
-// 1. Python готується у фоні, поки учень дивиться на карту.
-const runner = new PythonRunner({
-  onStatus: (status, details) => ui.showPythonStatus(status, details, () => runner.retry()),
+// 1. Робота без інтернету: Service Worker кешує сайт і Pyodide (js/offline.js, sw.js).
+const offlineReady = startOffline({
+  onUpdateReady: (apply) => ui.showUpdateBanner(() => {
+    storage.flush(); // код учня зберігаємо до перезавантаження
+    apply();
+  }),
 });
 storage.requestPersistence();
 
-// 2. Місії: порядок і теми з missions/index.json, кожна місія — окремий файл.
+// 2. Python готується у фоні, поки учень дивиться на карту. При першому відкритті — щойно
+//    Service Worker керує сторінкою, щоб Pyodide одразу потрапив у кеш.
+const runner = new PythonRunner({
+  onStatus: (status, details) => ui.showPythonStatus(status, details, () => runner.retry()),
+  startAfter: offlineReady,
+});
+runner.whenReady().then((ok) => ok && keepPythonOffline());
+
+// 3. Місії: порядок і теми з missions/index.json, кожна місія — окремий файл.
 async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url}: ${response.status}`);
@@ -48,7 +61,7 @@ try {
   throw error;
 }
 
-// 3. Запуск і перевірка коду.
+// 4. Запуск і перевірка коду.
 
 async function runCode(view, editor, { stdin, timeLimitMs }) {
   editor.clearErrorLine();
@@ -81,7 +94,7 @@ async function checkMission(view, editor, mission) {
   if (failure && !failure.hidden && failure.error?.line) editor.showErrorLine(failure.error.line);
 }
 
-// 4. Екрани.
+// 5. Екрани.
 
 let leaveScreen = () => {};
 
@@ -92,6 +105,9 @@ function openMap() {
     topics: catalog.topics,
     statusOf: storage.getMissionStatus,
     storageWorks: storage.isStorageWorking(),
+    onHomeHintClose: shouldSuggestHomeScreen() && !storage.getSetting('homeHintClosed')
+      ? () => storage.saveSetting('homeHintClosed', true)
+      : null,
   });
 }
 
@@ -153,6 +169,44 @@ function openSandbox() {
   leaveScreen = () => editor.destroy();
 }
 
+/** Віддає текст браузеру як файл для збереження (на iPad — у застосунок «Файли»). */
+function saveFile(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const link = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+function openSettings() {
+  ui.setActiveNav('settings');
+  document.title = 'Налаштування — Python Quest';
+  ui.renderSettings(main, {
+    onExport() {
+      const date = new Date().toISOString().slice(0, 10);
+      saveFile(`python-quest-progress-${date}.json`, JSON.stringify(storage.exportProgress(), null, 2));
+      return 'Файл з прогресом збережено. Знайдеш його в завантаженнях або в застосунку «Файли».';
+    },
+    async onImport(file) {
+      let data;
+      try {
+        data = JSON.parse(await file.text());
+      } catch {
+        throw new Error('Не вдалося прочитати файл. Вибери файл, який зберіг тренажер, — він закінчується на .json.');
+      }
+      if (!confirm('Додати прогрес із файлу до прогресу на цьому пристрої? Виконані місії лишаться виконаними.')) return '';
+      const count = storage.importProgress(data);
+      return `Прогрес відновлено. Місій у файлі: ${count}.`;
+    },
+    onReset() {
+      if (!confirm('Точно стерти код і прогрес усіх місій на цьому пристрої? Повернути їх не вийде.')) return '';
+      storage.resetAll();
+      return 'Усе скинуто. Можна починати спочатку.';
+    },
+  });
+}
+
 function route() {
   leaveScreen();
   leaveScreen = () => {};
@@ -160,6 +214,7 @@ function route() {
   const [section, id] = location.hash.replace(/^#\/?/, '').split('/');
   if (section === 'm' && catalog.byId.has(id)) openMission(catalog.byId.get(id));
   else if (section === 'sandbox') openSandbox();
+  else if (section === 'settings') openSettings();
   else openMap();
   scrollTo(0, 0);
 }

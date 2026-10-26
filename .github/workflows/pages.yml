@@ -1,31 +1,71 @@
-# Публікація сайту на GitHub Pages після кожного push у гілку main.
-#   1. Перевіряє місії: формат і те, що стартові шаблони не проходять тести.
-#      Еталонних розв'язків у репозиторії немає, тому — режим --no-solutions.
-#   2. Публікує лише файли сайту. Розв'язки, тести, інструменти й документи на сайт не потрапляють.
-# Якщо в сайту з'явиться новий файл чи папка (на етапі 3 — sw.js, manifest.webmanifest, icons/),
-# допиши їх у крок «Збираємо файли сайту».
-# Етап 3: перед публікацією тут же запускатимуться тести Playwright.
+# Перевірка на кожен push і публікація на GitHub Pages з гілки main.
+#   1. test (на кожен push і pull request):
+#      місії — формат і те, що стартові шаблони не проходять тести. Еталонних розв'язків
+#      у репозиторії немає, тому — режим --no-solutions; тести з розв'язками Playwright пропускає;
+#      Playwright — на емуляції iPad (WebKit) і Android-планшета (Chromium).
+#   2. deploy (лише main і лише після зеленого test):
+#      публікує тільки файли сайту. Розв'язки, тести, інструменти й документи на сайт не потрапляють.
+#      У sw.js підставляє версію кешу — хеш файлів сайту. Змінився сайт → нова версія →
+#      учні бачать «Доступне оновлення». Якщо сайт не змінився (правка README), версія та сама.
+# Якщо в сайту з'явиться новий файл чи папка, допиши їх у крок «Збираємо файли сайту»
+# і в список APP_FILES у sw.js.
 
-name: Публікація на GitHub Pages
+name: Перевірка і публікація
 
 on:
   push:
-    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Інструменти для тестів
+        run: npm ci
+
+      - name: Перевірка місій (формат і стартові шаблони)
+        run: node tools/validate-missions.mjs --no-solutions
+
+      - name: Браузери для Playwright
+        run: npx playwright install --with-deps webkit chromium
+
+      - name: Тести Playwright (iPad-WebKit і Android-Chromium)
+        run: npx playwright test
+
+      - name: Звіт про невдалі тести (скриншоти й trace)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
+
   deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -34,18 +74,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Перевірка місій (формат і стартові шаблони)
-        run: |
-          node --version
-          node tools/validate-missions.mjs --no-solutions
-
       - name: Збираємо файли сайту
         run: |
           mkdir _site
-          cp -r index.html css js vendor _site/
+          cp -r index.html manifest.webmanifest sw.js css js icons vendor _site/
           mkdir _site/missions
           cp missions/*.json _site/missions/
           du -sh _site
+
+      - name: Версія кешу в sw.js
+        run: |
+          VERSION=$(find _site -type f ! -path _site/sw.js -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)
+          sed -i "s/const VERSION = 'dev';/const VERSION = '$VERSION';/" _site/sw.js
+          grep -q "const VERSION = '$VERSION';" _site/sw.js || { echo "Не вдалося підставити версію в sw.js"; exit 1; }
+          echo "Версія кешу: $VERSION"
 
       - uses: actions/upload-pages-artifact@v5
         with:

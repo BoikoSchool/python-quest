@@ -18,6 +18,7 @@
 - Тести: npx playwright test
 - Перевірка місій: node tools/validate-missions.mjs
 - Перезбирання CodeMirror: node tools/build-vendor.mjs
+- PNG-іконки з icons/icon.svg: node tools/build-icons.mjs
 
 ## Правила роботи
 - Перед кожним комітом: валідатор місій і Playwright мають бути зеленими.

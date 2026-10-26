@@ -52,6 +52,18 @@ export function setActiveNav(name) {
   }
 }
 
+/** Банер унизу екрана: вийшла нова версія сайту. onUpdate() вмикає її. */
+export function showUpdateBanner(onUpdate) {
+  if (document.querySelector('.update-banner')) return;
+  const update = h('button', { class: 'btn btn--check btn--small', type: 'button',
+    onClick: () => { update.disabled = true; onUpdate(); } }, 'Оновити');
+  const banner = h('div', { class: 'update-banner', role: 'status' },
+    h('span', {}, 'Доступне оновлення'),
+    update,
+    h('button', { class: 'btn btn--ghost btn--small', type: 'button', onClick: () => banner.remove() }, 'Пізніше'));
+  document.body.append(banner);
+}
+
 export function renderFatal(main, message) {
   main.replaceChildren(h('p', { class: 'notice notice--bad' }, message));
 }
@@ -63,7 +75,17 @@ function firstSentence(text) {
   return match ? match[0].trim() : text;
 }
 
-export function renderMap(main, { topics, statusOf, storageWorks }) {
+/** Підказка для iPad: сайт на головному екрані Safari не стирає. onClose — «Зрозуміло». */
+function renderHomeHint(onClose) {
+  const hint = h('div', { class: 'notice home-hint' },
+    h('p', {},
+      'Додай тренажер на головний екран: натисни «Поділитися» і вибери «На екран "Додому"». '
+      + 'Так він відкриватиметься без інтернету, а Safari не зітре твій прогрес.'),
+    h('button', { class: 'btn btn--ghost btn--small', type: 'button', onClick: () => { hint.remove(); onClose(); } }, 'Зрозуміло'));
+  return hint;
+}
+
+export function renderMap(main, { topics, statusOf, storageWorks, onHomeHintClose = null }) {
   let number = 0;
   main.replaceChildren(
     h('div', { class: 'map' },
@@ -71,6 +93,7 @@ export function renderMap(main, { topics, statusOf, storageWorks }) {
       h('p', { class: 'map__lead' }, 'Обери місію, прочитай історію, напиши програму й перевір її.'),
       !storageWorks && h('p', { class: 'notice notice--warn' },
         'Цей браузер не дає зберігати прогрес: код зникне, коли закриєш вкладку.'),
+      onHomeHintClose && renderHomeHint(onHomeHintClose),
       ...topics.map((topic) => h('section', { class: 'topic', 'aria-label': topic.title },
         h('h2', { class: 'topic__title' }, topic.title),
         h('ol', { class: 'topic__missions' },
@@ -94,10 +117,85 @@ export function renderMap(main, { topics, statusOf, storageWorks }) {
   main.querySelector('h1').focus({ preventScroll: true });
 }
 
+// ---------- Налаштування: прогрес у файл і назад ----------
+
+/**
+ * Малює екран налаштувань. Самі дії — в app.js:
+ *   onExport(), onImport(file), onReset() повертають текст для учня (або кидають помилку з текстом).
+ */
+export function renderSettings(main, { onExport, onImport, onReset }) {
+  const message = h('p', { class: 'settings__message', role: 'status', 'aria-live': 'polite' });
+  const show = (text, kind) => {
+    message.textContent = text;
+    message.className = `settings__message settings__message--${kind}`;
+  };
+  // Кнопка біля кожної дії: показує результат або зрозумілу помилку.
+  const act = async (action) => {
+    try {
+      const text = await action();
+      if (text) show(text, 'ok');
+    } catch (error) {
+      show(error.message, 'bad');
+    }
+  };
+
+  const fileInput = h('input', {
+    type: 'file',
+    accept: '.json,application/json',
+    hidden: true,
+    onChange: () => {
+      const file = fileInput.files[0];
+      fileInput.value = ''; // щоб той самий файл можна було вибрати ще раз
+      if (file) act(() => onImport(file));
+    },
+  });
+
+  main.replaceChildren(
+    h('div', { class: 'settings' },
+      h('h1', { class: 'map__title', tabindex: '-1' }, 'Налаштування'),
+      message,
+      h('section', { class: 'settings__card', 'aria-labelledby': 'progress-title' },
+        h('h2', { class: 'settings__title', id: 'progress-title' }, 'Мій прогрес'),
+        h('p', {}, 'Прогрес зберігається лише в цьому браузері. Safari може стерти його, якщо довго не заходити на сайт.'),
+        h('p', {}, 'Збережи прогрес у файл, щоб не втратити його або перенести на інший пристрій. '
+          + 'Під час відновлення нічого не зникає: виконані місії лишаються виконаними.'),
+        h('div', { class: 'settings__actions' },
+          h('button', { class: 'btn btn--check', type: 'button', onClick: () => act(onExport) }, 'Експортувати прогрес'),
+          h('button', { class: 'btn btn--ghost', type: 'button', onClick: () => fileInput.click() }, 'Імпортувати прогрес'),
+          fileInput)),
+      h('section', { class: 'settings__card', 'aria-labelledby': 'reset-title' },
+        h('h2', { class: 'settings__title', id: 'reset-title' }, 'Почати спочатку'),
+        h('p', {}, 'Видаляє код і прогрес усіх місій на цьому пристрої.'),
+        h('div', { class: 'settings__actions' },
+          h('button', { class: 'btn btn--danger', type: 'button', onClick: () => act(onReset) }, 'Скинути все'))),
+    ),
+  );
+  main.querySelector('h1').focus({ preventScroll: true });
+}
+
 // ---------- Пояснення помилок ----------
-// Повний словник помилок українською з'явиться на етапі 2.
+// Словник з docs/SPEC.md, п. 3.4. Для інших помилок учень бачить лише оригінал Python.
+
+const ERROR_TEXT = {
+  TypeError: 'Операцію виконано над несумісними типами, наприклад рядок + число. '
+    + 'Число з рядка отримаєш через int(), а рядок із числа — через str().',
+  ValueError: 'Не вдалося перетворити значення. Наприклад, int("абв") не дає числа.',
+  ZeroDivisionError: 'Ділення на нуль. На нуль ділити не можна.',
+};
 
 function explainError(error, inCheck) {
+  switch (error.type) {
+    case 'SyntaxError':
+      return `${error.line ? `У рядку ${error.line} порушено` : 'Порушено'} правила запису. Перевір дужки, лапки та двокрапку.`;
+    case 'IndentationError':
+    case 'TabError':
+      return 'Відступи не збігаються. Усередині блоку однакові відступи — 4 пробіли.';
+    case 'NameError': {
+      const name = error.message?.match(/name '(.+?)' is not defined/)?.[1];
+      return `Python не знає імені${name ? ` «${name}»` : ''}. Можливо, змінна ще не створена або є одрук.`;
+    }
+  }
+  if (ERROR_TEXT[error.type]) return ERROR_TEXT[error.type];
   if (error.type === 'EOFError') {
     return inCheck
       ? 'Програма просить більше вхідних даних, ніж є в тесті.'
