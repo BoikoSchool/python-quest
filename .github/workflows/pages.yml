@@ -3,6 +3,8 @@
 #      місії — формат і те, що стартові шаблони не проходять тести. Еталонних розв'язків
 #      у репозиторії немає, тому — режим --no-solutions; тести з розв'язками Playwright пропускає;
 #      Playwright — на емуляції iPad (WebKit) і Android-планшета (Chromium).
+#      Браузери Playwright кешуються за його версією, тож завантажуються лише після оновлення Playwright.
+#      Ubuntu закріплено (24.04): від версії системи залежать і збірки браузерів, і системні бібліотеки.
 #   2. deploy (лише main і лише після зеленого test):
 #      публікує тільки файли сайту. Розв'язки, тести, інструменти й документи на сайт не потрапляють.
 #      У sw.js підставляє версію кешу — хеш файлів сайту. Змінився сайт → нова версія →
@@ -22,8 +24,8 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -40,8 +42,28 @@ jobs:
       - name: Перевірка місій (формат і стартові шаблони)
         run: node tools/validate-missions.mjs --no-solutions
 
+      - name: Версія Playwright (ключ кешу браузерів)
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Кеш браузерів Playwright
+        id: browsers-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-ubuntu-24.04-${{ steps.playwright.outputs.version }}
+
+      # Дзеркало пакетів Ubuntu іноді зависає — краще швидко впасти, ніж чекати весь ліміт job.
       - name: Браузери для Playwright
-        run: npx playwright install --with-deps webkit chromium
+        timeout-minutes: 10
+        env:
+          CACHE_HIT: ${{ steps.browsers-cache.outputs.cache-hit }}
+        run: |
+          if [ "$CACHE_HIT" = "true" ]; then
+            npx playwright install-deps webkit chromium   # браузери вже з кешу — лише системні бібліотеки
+          else
+            npx playwright install --with-deps webkit chromium
+          fi
 
       - name: Тести Playwright (iPad-WebKit і Android-Chromium)
         run: npx playwright test
@@ -57,7 +79,7 @@ jobs:
   deploy:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
