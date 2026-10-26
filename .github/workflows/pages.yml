@@ -3,8 +3,10 @@
 #      місії — формат і те, що стартові шаблони не проходять тести. Еталонних розв'язків
 #      у репозиторії немає, тому — режим --no-solutions; тести з розв'язками Playwright пропускає;
 #      Playwright — на емуляції iPad (WebKit) і Android-планшета (Chromium).
-#      Браузери Playwright кешуються за його версією, тож завантажуються лише після оновлення Playwright.
-#      Ubuntu закріплено (24.04): від версії системи залежать і збірки браузерів, і системні бібліотеки.
+#      Job працює в офіційному контейнері Playwright: браузери й системні бібліотеки там уже є,
+#      тож apt і дзеркала Ubuntu (які іноді зависають) не потрібні.
+#      Тег контейнера = версія @playwright/test у package.json. Оновлюєш Playwright — зміни тег
+#      (тест tests/versions.spec.js звіряє їх і впаде, якщо забудеш).
 #   2. deploy (лише main і лише після зеленого test):
 #      публікує тільки файли сайту. Розв'язки, тести, інструменти й документи на сайт не потрапляють.
 #      У sw.js підставляє версію кешу — хеш файлів сайту. Змінився сайт → нова версія →
@@ -26,6 +28,9 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --user 1001 # той самий користувач, що й у runner: інакше checkout не має прав на папку
     steps:
       - uses: actions/checkout@v7
         with:
@@ -41,29 +46,6 @@ jobs:
 
       - name: Перевірка місій (формат і стартові шаблони)
         run: node tools/validate-missions.mjs --no-solutions
-
-      - name: Версія Playwright (ключ кешу браузерів)
-        id: playwright
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Кеш браузерів Playwright
-        id: browsers-cache
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-browsers-ubuntu-24.04-${{ steps.playwright.outputs.version }}
-
-      # Дзеркало пакетів Ubuntu іноді зависає — краще швидко впасти, ніж чекати весь ліміт job.
-      - name: Браузери для Playwright
-        timeout-minutes: 10
-        env:
-          CACHE_HIT: ${{ steps.browsers-cache.outputs.cache-hit }}
-        run: |
-          if [ "$CACHE_HIT" = "true" ]; then
-            npx playwright install-deps webkit chromium   # браузери вже з кешу — лише системні бібліотеки
-          else
-            npx playwright install --with-deps webkit chromium
-          fi
 
       - name: Тести Playwright (iPad-WebKit і Android-Chromium)
         run: npx playwright test

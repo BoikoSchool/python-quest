@@ -103,11 +103,20 @@ PQ_BASE_URL=https://boikoschool.github.io/python-quest/ npx playwright test
 
 CodeMirror оновлюється так само: зміни версії в `package.json`, `npm install`, `node tools/build-vendor.mjs`.
 
+## Як оновити Playwright
+
+Playwright — це лише інструмент для тестів, на сайт він не потрапляє. У CI тести йдуть в офіційному контейнері `mcr.microsoft.com/playwright`, де вже є браузери. Тому версію треба міняти у двох місцях разом:
+
+1. `npm install --save-exact @playwright/test@<версія>` — версія в `package.json` має бути точною, без `^`.
+2. У `.github/workflows/pages.yml` зміни тег контейнера на ту саму версію: `image: mcr.microsoft.com/playwright:v<версія>-noble`. Список тегів: https://mcr.microsoft.com/v2/playwright/tags/list
+3. `npx playwright install webkit chromium` — нові браузери для локальних тестів.
+4. `npx playwright test` має бути зеленим. Тест `tests/versions.spec.js` звіряє тег контейнера з `package.json` і впаде, якщо версії розійшлися.
+
 ## Публікація
 
 GitHub Actions (`.github/workflows/pages.yml`):
 
-1. **на кожен push і pull request** перевіряє місії (`--no-solutions`) і проганяє тести Playwright на емуляції iPad і Android-планшета. Якщо тести впали, скриншоти й trace лежать в артефакті `playwright-results`;
+1. **на кожен push і pull request** перевіряє місії (`--no-solutions`) і проганяє тести Playwright на емуляції iPad і Android-планшета. Тести йдуть в офіційному контейнері Playwright, де браузери вже встановлено, тож нічого не завантажується з дзеркал Ubuntu. Якщо тести впали, скриншоти й trace лежать в артефакті `playwright-results`;
 2. **після push у `main`**, якщо тести зелені, публікує на GitHub Pages **лише файли сайту**: `index.html`, `manifest.webmanifest`, `sw.js`, `css/`, `js/`, `icons/`, `vendor/`, `missions/*.json`.
 
 Під час публікації в `sw.js` підставляється версія кешу — хеш файлів сайту. Змінився сайт — і в учнів з'являється банер «Доступне оновлення». Кнопка «Оновити» зберігає код і перезавантажує сторінку. Вручну версію міняти не треба.
