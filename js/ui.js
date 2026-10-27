@@ -480,6 +480,7 @@ function renderHints(hints, { opened = 0, onShow }) {
 }
 
 const SENT_TEXT = {
+  sending: 'Надсилаю результат учителю…',
   sent: '✔ Результат надіслано вчителю',
   queued: 'Результат надішлеться, коли з\'явиться інтернет',
 };
@@ -622,22 +623,33 @@ export function renderWorkspace(main, {
       const showSuccess = () => {
         const sending = onSolved();
         doneChip.hidden = false;
-        const sent = h('p', { class: 'success__sent', role: 'status' });
+        // Поки результат іде вчителю, далі не пускаємо: інакше учень часто йде зі сторінки,
+        // не дочекавшись відповіді. Це триває не довше 15 с, потім запис просто чекає в черзі.
+        const target = next ? next.href : '#/';
+        const go = h('button', {
+          class: next ? 'btn btn--run' : 'btn btn--check',
+          type: 'button',
+          disabled: Boolean(sending),
+          onClick: () => { location.hash = target; },
+        }, next ? 'Наступна місія' : 'До карти місій');
+        const sent = h('p', { class: `success__sent${sending ? ' success__sent--sending' : ''}`, role: 'status' },
+          sending && [h('span', { class: 'spinner', 'aria-hidden': 'true' }), SENT_TEXT.sending]);
         const success = h('div', { class: 'success' },
           h('p', { class: 'success__title' }, 'Місію виконано!'),
-          next
-            ? h('a', { class: 'btn btn--run', href: next.href }, 'Наступна місія')
-            : h('a', { class: 'btn btn--check', href: '#/' }, 'До карти місій'),
+          go,
           next && h('p', { class: 'success__next' }, next.title),
           sent);
         sending?.then((result) => {
-          sent.textContent = SENT_TEXT[result];
+          sent.replaceChildren(SENT_TEXT[result]);
           sent.className = `success__sent success__sent--${result}`;
+          go.disabled = false;
+          go.focus({ preventScroll: true });
         });
         const form = outputBody.querySelector('.question');
         if (form) form.replaceWith(success);
         else outputBody.append(success);
-        success.querySelector('.btn').focus({ preventScroll: false });
+        if (!sending) go.focus({ preventScroll: false });
+        else success.scrollIntoView({ block: 'nearest' });
       };
       if (question) {
         outputBody.append(renderQuestion(question, showSuccess));

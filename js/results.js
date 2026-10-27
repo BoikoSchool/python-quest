@@ -51,6 +51,9 @@ async function post(record) {
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(record),
+      // Запит дійде, навіть якщо учень піде зі сторінки («Карта», «Змінити учня»).
+      // Тіло keepalive-запиту — до 64 КБ, тому код обрізаємо до MAX_CODE_LENGTH символів.
+      keepalive: true,
       signal: controller.signal,
     });
   } finally {
@@ -81,13 +84,21 @@ function sendQueue() {
 /**
  * Ставить запис про зараховану місію в чергу і пробує відправити.
  * Повертає 'sent' — запис дійшов, або 'queued' — він надішлеться пізніше.
+ * Відповідь — не пізніше ніж за SEND_TIMEOUT_MS, навіть якщо в черзі перед ним були інші записи:
+ * учень чекає на неї з неактивною кнопкою «Наступна місія».
  */
 export async function sendResult(record) {
   const uid = crypto.randomUUID();
   const code = record.code.length > MAX_CODE_LENGTH ? record.code.slice(0, MAX_CODE_LENGTH) : record.code;
   writeOutbox([...readOutbox(), { app: 'python-quest', ...record, code, uid }].slice(-MAX_RECORDS));
-  await sending; // якщо черга вже відправляється — дочекаємось і запустимо ще раз
-  await sendQueue();
+  const delivered = (async () => {
+    await sending; // якщо черга вже відправляється — дочекаємось і запустимо ще раз
+    await sendQueue();
+  })();
+  let timer;
+  const tooLong = new Promise((resolve) => { timer = setTimeout(resolve, SEND_TIMEOUT_MS); });
+  await Promise.race([delivered, tooLong]);
+  clearTimeout(timer);
   return readOutbox().some((item) => item.uid === uid) ? 'queued' : 'sent';
 }
 

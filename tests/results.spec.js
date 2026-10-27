@@ -16,19 +16,22 @@ const SOLUTION = 'print("Доброго ранку, школо!")\nprint("В е�
 
 const readOutbox = (page) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), OUTBOX);
 const sentLine = (page) => page.locator('.success__sent');
+const nextButton = (page) => page.getByRole('button', { name: 'Наступна місія' });
 
 /**
  * Вмикає надсилання на адресу-заглушку. Повертає «таблицю вчителя»:
- * posts — що прийшло; online — чи є інтернет (false — запит обривається).
+ * posts — що прийшло; online — чи є інтернет (false — запит обривається);
+ * wait — проміс, до якого сервер «думає» перед відповіддю (щоб побачити стан «надсилаю»).
  */
 async function connectTeacher(page) {
-  const teacher = { posts: [], online: true };
+  const teacher = { posts: [], online: true, wait: null };
   await page.route('**/js/config.js', (route) => route.fulfill({
     contentType: 'text/javascript; charset=utf-8',
     body: `export const RESULTS_URL = '${TEACHER_URL}';\n`,
   }));
-  await page.route(TEACHER_URL, (route) => {
+  await page.route(TEACHER_URL, async (route) => {
     if (!teacher.online) return route.abort('internetdisconnected');
+    if (teacher.wait) await teacher.wait;
     const request = route.request();
     teacher.posts.push({
       method: request.method(),
@@ -49,15 +52,25 @@ async function solveRadio(page) {
   await expect(page.getByText('Місію виконано!')).toBeVisible();
 }
 
-test('зарахована місія — запис учителю; повторне проходження не надсилається', async ({ page }) => {
+test('зарахована місія — запис учителю; поки надсилається, далі не пускаємо; повтор не надсилається', async ({ page }) => {
   const teacher = await connectTeacher(page);
+  let answer;
+  teacher.wait = new Promise((resolve) => { answer = resolve; });
   await openApp(page, '#/m/radio-hello');
   await page.getByRole('button', { name: 'Не виходить? Підказка' }).click();
   await checkButton(page).click(); // шаблон не проходить — це перша перевірка
   await expect(page.locator('.verdict--bad')).toBeVisible();
   await solveRadio(page);
 
+  // Сервер ще «думає»: кнопка неактивна, учень бачить, що результат надсилається.
+  await expect(sentLine(page)).toHaveText('Надсилаю результат учителю…');
+  await expect(page.locator('.success__sent .spinner')).toBeVisible();
+  await expect(nextButton(page)).toBeDisabled();
+
+  answer();
   await expect(sentLine(page)).toHaveText('✔ Результат надіслано вчителю');
+  await expect(nextButton(page)).toBeEnabled();
+  await expect(nextButton(page)).toBeFocused();
   expect(teacher.posts).toHaveLength(1);
   const [post] = teacher.posts;
   expect(post.method).toBe('POST');
@@ -94,14 +107,33 @@ test('без інтернету запис чекає в черзі й іде с
   await solveRadio(page);
 
   await expect(sentLine(page)).toHaveText('Результат надішлеться, коли з\'явиться інтернет');
+  await expect(nextButton(page)).toBeEnabled();
   expect(await readOutbox(page)).toHaveLength(1);
   expect(teacher.posts).toHaveLength(0);
+
+  // Кнопка справді веде далі.
+  await nextButton(page).click();
+  await expect(page).toHaveURL(/#\/m\/excursion-price$/);
 
   teacher.online = true;
   await page.evaluate(() => dispatchEvent(new Event('online')));
   await expect.poll(() => teacher.posts.length).toBe(1);
   expect(teacher.posts[0].body).toMatchObject({ student: STUDENT.name, missionId: 'radio-hello', checks: 1, hints: 0 });
   await expect.poll(() => readOutbox(page)).toBeNull();
+});
+
+test('сервер не відповідає 15 с — кнопка знову активна, запис чекає в черзі', async ({ page }) => {
+  const teacher = await connectTeacher(page);
+  teacher.wait = new Promise(() => {}); // відповіді не буде
+  await openApp(page, '#/m/radio-hello');
+  await solveRadio(page);
+  const started = Date.now();
+  await expect(nextButton(page)).toBeDisabled();
+
+  await expect(sentLine(page)).toHaveText('Результат надішлеться, коли з\'явиться інтернет', { timeout: 25_000 });
+  await expect(nextButton(page)).toBeEnabled();
+  expect(Date.now() - started).toBeGreaterThan(13_000);
+  expect(await readOutbox(page)).toHaveLength(1);
 });
 
 test('черга з минулого разу відправляється під час наступного відкриття сайту', async ({ page }) => {
@@ -131,6 +163,9 @@ test('порожній config.js — нічого не надсилається 
   });
   await openApp(page, '#/m/radio-hello');
   await solveRadio(page);
+  // Чекати нічого — кнопка активна одразу.
+  await expect(nextButton(page)).toBeEnabled({ timeout: 1000 });
+  await expect(nextButton(page)).toBeFocused();
   await page.waitForTimeout(500);
   await expect(sentLine(page)).toHaveText('');
   expect(await readOutbox(page)).toBeNull();

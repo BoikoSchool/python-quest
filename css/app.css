@@ -1229,6 +1229,23 @@ pre {
   font-weight: 600;
 }
 
+/* Крутилка «Надсилаю результат учителю…» */
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 8px;
+  vertical-align: -0.15em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner 0.8s linear infinite;
+}
+
+@keyframes spinner {
+  to { transform: rotate(360deg); }
+}
+
 /* ---------- Менше руху, якщо учень так налаштував пристрій ---------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -1236,5 +1253,11 @@ pre {
     animation: none;
     width: 100%;
     opacity: 0.6;
+  }
+
+  .spinner {
+    animation: none;
+    border-right-color: currentColor;
+    opacity: 0.5;
   }
 }
