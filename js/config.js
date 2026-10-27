@@ -6,4 +6,4 @@
 //
 // Порожній рядок — надсилання вимкнене: нічого не залишає планшет.
 
-export const RESULTS_URL = '';
+export const RESULTS_URL = 'https://script.google.com/macros/s/AKfycbwk3_ZEzOV65Z9V0-vByDcCoBE75rEQy4EfaI0Ol64k-gBot9foG7NicO7Qwb81Zyxv/exec';

@@ -121,6 +121,10 @@ test('черга з минулого разу відправляється пі�
 });
 
 test('порожній config.js — нічого не надсилається й не з\'являється', async ({ page, baseURL }) => {
+  await page.route('**/js/config.js', (route) => route.fulfill({
+    contentType: 'text/javascript; charset=utf-8',
+    body: 'export const RESULTS_URL = \'\';\n',
+  }));
   const outside = [];
   page.on('request', (request) => {
     if (!request.url().startsWith(new URL(baseURL).origin)) outside.push(request.url());

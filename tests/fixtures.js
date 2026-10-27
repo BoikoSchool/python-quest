@@ -2,6 +2,11 @@
 // тож тести не зупиняються на екрані «Хто ти?».
 //
 // Тести самих профілів вимикають це: test.use({ student: false }).
+//
+// Здана в тесті місія не повинна потрапити в справжню таблицю вчителя. Тестовий сервер віддає
+// порожній js/config.js, а тут — запобіжник і для тестів проти живого сайту (PQ_BASE_URL):
+// fetch на адреси Google обривається просто в сторінці. Самого лише context.route мало:
+// у WebKit запити сторінки, якою керує Service Worker, повз нього проходять.
 
 import { test as base, expect } from '@playwright/test';
 
@@ -21,8 +26,26 @@ export async function addStudent(page) {
   }, STUDENT);
 }
 
+const GOOGLE = /^https:\/\/script\.google(usercontent)?\.com\//;
+
+/** Обриває запити до Google у цьому контексті браузера. */
+export async function blockGoogle(context) {
+  await context.route(GOOGLE, (route) => route.abort('blockedbyclient'));
+  await context.addInitScript((pattern) => {
+    const google = new RegExp(pattern);
+    const realFetch = window.fetch;
+    window.fetch = (input, init) => (google.test(String(input?.url ?? input))
+      ? Promise.reject(new TypeError('Запити до Google у тестах заблоковано'))
+      : realFetch.call(window, input, init));
+  }, GOOGLE.source);
+}
+
 export const test = base.extend({
   student: [true, { option: true }],
+  context: async ({ context }, use) => {
+    await blockGoogle(context);
+    await use(context);
+  },
   page: async ({ page, student }, use) => {
     if (student) await addStudent(page);
     await use(page);

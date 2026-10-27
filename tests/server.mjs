@@ -2,9 +2,12 @@
 // так само, як GitHub Pages (сайт у підпапці, без особливих заголовків).
 // Тож тести одразу помітять абсолютний шлях на кшталт "/js/app.js".
 //
-// Одна відмінність: у sw.js замість версії 'dev' підставляється версія з cookie pq-sw
-// (без cookie — 'test'), як це робить GitHub Actions під час публікації. Так тести перевіряють
-// справжню стратегію кешу, а тест оновлення може «випустити» нову версію лише для себе.
+// Дві відмінності:
+//   • у sw.js замість версії 'dev' підставляється версія з cookie pq-sw (без cookie — 'test'),
+//     як це робить GitHub Actions під час публікації. Так тести перевіряють справжню стратегію кешу,
+//     а тест оновлення може «випустити» нову версію лише для себе;
+//   • js/config.js завжди з порожньою адресою: здані в тестах місії не повинні потрапити
+//     в справжню таблицю вчителя. Тести надсилання підставляють свою адресу-заглушку.
 //
 //   node tests/server.mjs [порт]      → http://localhost:4173/python-quest/
 
@@ -48,6 +51,11 @@ createServer(async (request, response) => {
   }
   if (relative === '' || relative.endsWith('/')) relative += 'index.html';
   const file = normalize(join(root, relative));
+  if (relative === 'js/config.js') {
+    response.writeHead(200, { 'Content-Type': TYPES['.js'], 'Cache-Control': 'max-age=600' });
+    response.end("export const RESULTS_URL = '';\n");
+    return;
+  }
   if (relative === 'sw.js') {
     const version = request.headers.cookie?.match(/(?:^|;\s*)pq-sw=([\w-]+)/)?.[1] ?? 'test';
     const body = (await readFile(file, 'utf8')).replace("const VERSION = 'dev';", `const VERSION = '${version}';`);

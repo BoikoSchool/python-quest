@@ -1,7 +1,7 @@
 // Збереження прогресу: код і статус місії лишаються після перезавантаження; експорт, імпорт і скидання.
 
 import { readFile } from 'node:fs/promises';
-import { addStudent, expect, PROFILE_KEY, STUDENT, test } from './fixtures.js';
+import { addStudent, blockGoogle, expect, PROFILE_KEY, STUDENT, test } from './fixtures.js';
 import { checkButton, openApp, setCode } from './helpers.js';
 
 test('код місії зберігається, а на карті вона «в роботі»', async ({ page }) => {
@@ -22,6 +22,8 @@ test('зарахована місія лишається «виконано» п
   await page.getByLabel('Виводить текст на екран').check();
   await page.getByRole('button', { name: 'Відповісти' }).click();
   await expect(page.getByText('Місію виконано!')).toBeVisible();
+  // Тестовий сервер віддає порожній js/config.js — нічого не надсилається вчителю.
+  await expect(page.locator('.success__sent')).toHaveText('');
 
   await page.reload();
   await expect(page.locator('.task .chip--done')).toBeVisible();
@@ -75,6 +77,7 @@ test('експорт у файл і імпорт на «іншому прист�
 
   // Інший пристрій — новий контекст браузера з порожнім сховищем (і тим самим учнем).
   const other = await browser.newPage();
+  await blockGoogle(other.context());
   await addStudent(other);
   await other.goto('./#/settings');
   await importFile(other, progressFile(saved));
