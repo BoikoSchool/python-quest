@@ -7,14 +7,25 @@ import { expect, test } from '@playwright/test';
 
 const code = readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8');
 
-/** Аркуш, як його бачить Apps Script. Апостроф на початку тексту таблиця не показує й не повертає. */
+/**
+ * Аркуш, як його бачить Apps Script. Апостроф на початку тексту таблиця не показує й не повертає.
+ * Оформлення не малюється, а записується в format: «рядок:стовпець» → { numberFormat, font, wrap, … }.
+ */
 class FakeSheet {
   constructor() {
     this.rows = []; // те, що записав скрипт, разом з апострофами
+    this.format = {};
+    this.widths = {};
+    this.rowHeights = {};
+    this.frozen = { rows: 0, columns: 0 };
   }
 
   getLastRow() {
     return this.rows.length;
+  }
+
+  getLastColumn() {
+    return Math.max(0, ...this.rows.map((row) => row.length));
   }
 
   appendRow(row) {
@@ -23,25 +34,49 @@ class FakeSheet {
 
   getRange(row, column, rowCount, columnCount) {
     const sheet = this;
-    return {
+    const style = (name, value) => {
+      for (let r = row; r < row + rowCount; r += 1) {
+        for (let c = column; c < column + columnCount; c += 1) {
+          sheet.format[`${r}:${c}`] = { ...sheet.format[`${r}:${c}`], [name]: value };
+        }
+      }
+    };
+    const range = {
       getValues: () => sheet.rows.slice(row - 1, row - 1 + rowCount)
-        .map((r) => r.slice(column - 1, column - 1 + columnCount)
+        .map((r) => Array.from({ length: columnCount }, (_, j) => r[column - 1 + j])
           .map((value) => (typeof value === 'string' ? value.replace(/^'/, '') : value ?? ''))),
       setValues(values) {
         values.forEach((r, i) => {
           sheet.rows[row - 1 + i] ??= [];
           r.forEach((value, j) => { sheet.rows[row - 1 + i][column - 1 + j] = value; });
         });
-        return this;
-      },
-      setFontWeight() {
-        return this;
+        return range;
       },
     };
+    for (const name of ['FontWeight', 'NumberFormat', 'FontFamily', 'WrapStrategy', 'HorizontalAlignment']) {
+      range[`set${name}`] = (value) => {
+        style(name[0].toLowerCase() + name.slice(1), value);
+        return range;
+      };
+    }
+    return range;
   }
 
-  setFrozenRows() {}
-  setFrozenColumns() {}
+  setColumnWidth(column, width) {
+    this.widths[column] = width;
+  }
+
+  setRowHeightsForced(row, count, height) {
+    for (let r = row; r < row + count; r += 1) this.rowHeights[r] = height;
+  }
+
+  setFrozenRows(count) {
+    this.frozen.rows = count;
+  }
+
+  setFrozenColumns(count) {
+    this.frozen.columns = count;
+  }
 
   clearContents() {
     this.rows = [];
@@ -53,6 +88,7 @@ function loadScript() {
   const lock = { waits: 0, releases: 0 };
   const context = vm.createContext({
     SpreadsheetApp: {
+      WrapStrategy: { CLIP: 'CLIP', WRAP: 'WRAP' },
       getActiveSpreadsheet: () => ({
         getSheetByName: (name) => sheets.get(name) ?? null,
         insertSheet: (name) => {
@@ -90,6 +126,8 @@ const record = (fields = {}) => ({
   ...fields,
 });
 
+const LOG_HEADERS = ['Учень', 'Клас', 'Час виконання', 'Отримано', 'ID місії', 'Місія', 'Перевірок', 'Підказок', 'Хвилин', 'Код'];
+
 test('doGet відповідає, що приймач працює', () => {
   const { context } = loadScript();
   expect(context.doGet().text).toBe('Python Quest: приймач результатів працює.');
@@ -100,16 +138,55 @@ test('запис потрапляє в «Журнал» із заголовка�
   expect(post(record())).toBe('ok');
 
   const log = sheets.get('Журнал').rows;
-  expect(log[0]).toEqual(['Час виконання', 'Отримано', 'Учень', 'Клас', 'ID місії', 'Місія', 'Перевірок', 'Підказок', 'Хвилин', 'Код']);
+  expect(log[0]).toEqual(LOG_HEADERS);
   expect(log).toHaveLength(2);
-  expect(log[1].slice(2)).toEqual(['Олена Коваль', '6-А', 'radio-hello', 'Шкільне радіо', 2, 1, 7, 'print("Привіт")\n']);
-  expect(log[1][0].toISOString()).toBe('2026-10-27T09:00:00.000Z');
+  expect([...log[1].slice(0, 2), ...log[1].slice(4)])
+    .toEqual(['Олена Коваль', '6-А', 'radio-hello', 'Шкільне радіо', 2, 1, 7, 'print("Привіт")\n']);
+  expect(log[1][2].toISOString()).toBe('2026-10-27T09:00:00.000Z');
 
   expect(sheets.get('Зведення').rows).toEqual([
-    ['Клас', 'Учень', 'Виконано', 'Шкільне радіо'],
-    ['6-А', 'Олена Коваль', 1, '✔ 27.10'],
+    ['Учень', 'Клас', 'Виконано', 'Шкільне радіо'],
+    ['Олена Коваль', '6-А', 1, '✔ 27.10'],
   ]);
   expect(lock).toEqual({ waits: 1, releases: 1 });
+});
+
+test('оформлення: час коротко, код моноширинним без перенесення, учень закріплений', () => {
+  const { sheets, post } = loadScript();
+  post(record());
+  post(record({ missionId: 'eco-grams', missionTitle: 'Екомоніторинг', code: 'a = 1\nb = 2\nprint(a + b)\n' }));
+
+  const log = sheets.get('Журнал');
+  for (const row of [2, 3]) {
+    expect(log.format[`${row}:3`].numberFormat).toBe('dd.MM HH:mm'); // Час виконання
+    expect(log.format[`${row}:4`].numberFormat).toBe('dd.MM HH:mm'); // Отримано
+    expect(log.format[`${row}:10`]).toMatchObject({ fontFamily: 'Roboto Mono', wrapStrategy: 'CLIP' });
+    expect(log.rowHeights[row]).toBe(21); // багаторядковий код не робить рядок вищим
+  }
+  expect(log.widths[3]).toBeGreaterThanOrEqual(110);
+  expect(log.widths[4]).toBeGreaterThanOrEqual(110);
+  expect(log.frozen).toEqual({ rows: 1, columns: 1 });
+  expect(sheets.get('Зведення').frozen).toEqual({ rows: 1, columns: 1 });
+});
+
+test('«Журнал» старої версії скрипта переставляється в новий порядок стовпців', () => {
+  const { sheets, post, context } = loadScript();
+  context.SpreadsheetApp.getActiveSpreadsheet().insertSheet('Журнал');
+  const old = sheets.get('Журнал');
+  const done = new Date('2026-10-26T10:00:00.000Z');
+  old.rows = [
+    ['Час виконання', 'Отримано', 'Учень', 'Клас', 'ID місії', 'Місія', 'Перевірок', 'Підказок', 'Хвилин', 'Код'],
+    [done, done, 'Тест Перевірка', '6-А', 'radio-hello', 'Шкільне радіо', 1, 0, 3, "'=1+1"],
+  ];
+
+  expect(post(record())).toBe('ok');
+  expect(post(record({ student: 'Тест Перевірка' }))).toBe('вже є'); // старий рядок не загубився
+
+  expect(old.rows[0]).toEqual(LOG_HEADERS);
+  expect(old.rows[1]).toEqual(['Тест Перевірка', '6-А', done, done, 'radio-hello', 'Шкільне радіо', 1, 0, 3, "'=1+1"]);
+  expect(old.rows[2][0]).toBe('Олена Коваль');
+  expect(old.format['2:3'].numberFormat).toBe('dd.MM HH:mm');
+  expect(sheets.get('Зведення').rows.map((row) => row[0])).toEqual(['Учень', 'Олена Коваль', 'Тест Перевірка']);
 });
 
 test('той самий учень і місія вдруге не додаються, навіть з іншим регістром і пробілами', () => {
@@ -126,10 +203,10 @@ test('текст, схожий на формулу, записується як 
   const { sheets, post } = loadScript();
   post(record({ student: '=HYPERLINK("http://x") Учень', missionTitle: '+1', code: '-1\nprint(1)' }));
   const row = sheets.get('Журнал').rows[1];
-  expect(row[2]).toBe('\'=HYPERLINK("http://x") Учень');
+  expect(row[0]).toBe('\'=HYPERLINK("http://x") Учень');
   expect(row[5]).toBe('\'+1');
   expect(row[9]).toBe('\'-1\nprint(1)');
-  expect(sheets.get('Зведення').rows[1][1]).toBe('\'=HYPERLINK("http://x") Учень');
+  expect(sheets.get('Зведення').rows[1][0]).toBe('\'=HYPERLINK("http://x") Учень');
 });
 
 test('чужі й зіпсовані записи не потрапляють у таблицю', () => {
@@ -148,11 +225,26 @@ test('«Зведення»: учні за класом і абеткою, міс
     time: '2026-10-28T09:00:00.000Z' }));
   post(record({ student: 'Андрій Ткач', className: '6-А' }));
   post(record({ student: 'Олена Коваль', className: '6-А' }));
+  post(record({ student: 'Аліна Цао', className: '9 Харків' }));
 
   expect(sheets.get('Зведення').rows).toEqual([
-    ['Клас', 'Учень', 'Виконано', 'Шкільне радіо', 'Екомоніторинг'],
-    ['6-А', 'Андрій Ткач', 1, '✔ 27.10', ''],
-    ['6-А', 'Олена Коваль', 2, '✔ 27.10', '✔ 28.10'],
-    ['10-А', 'Ярема Бойко', 1, '✔ 27.10', ''],
+    ['Учень', 'Клас', 'Виконано', 'Шкільне радіо', 'Екомоніторинг'],
+    ['Андрій Ткач', '6-А', 1, '✔ 27.10', ''],
+    ['Олена Коваль', '6-А', 2, '✔ 27.10', '✔ 28.10'],
+    ['Аліна Цао', '9 Харків', 1, '✔ 27.10', ''],
+    ['Ярема Бойко', '10-А', 1, '✔ 27.10', ''],
   ]);
+});
+
+test('меню «Оновити таблицю» заново оформлює всі рядки', () => {
+  const { context, sheets, post } = loadScript();
+  post(record());
+  post(record({ missionId: 'eco-grams', missionTitle: 'Екомоніторинг' }));
+  const log = sheets.get('Журнал');
+  log.format = {};
+  log.rowHeights = {};
+  context.refreshSheets();
+  expect(log.format['2:10'].fontFamily).toBe('Roboto Mono');
+  expect(log.format['3:3'].numberFormat).toBe('dd.MM HH:mm');
+  expect(log.rowHeights).toEqual({ 2: 21, 3: 21 });
 });

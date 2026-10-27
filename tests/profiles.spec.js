@@ -48,9 +48,9 @@ test('перше відкриття — форма; ім\'я й клас пер�
 
   await createStudent(page, 'олена', '6а');
   await expect(page.locator('.who__error')).toHaveText('Напиши ім\'я та прізвище, наприклад: Олена Коваль.');
-  await createStudent(page, 'олена   коваль', 'шостий');
-  await expect(page.locator('.who__error')).toHaveText('Напиши клас так: 6-А.');
-  await createStudent(page, 'олена   коваль', '6а');
+  await createStudent(page, 'олена   коваль', '   ');
+  await expect(page.locator('.who__error')).toHaveText('Напиши свій клас, наприклад: 6-А.');
+  await createStudent(page, 'олена   коваль', '6а'); // короткий запис стає «6-А»
 
   await expect(page.locator('.map__title')).toHaveText('Карта місій');
   await expect(page.locator('#student')).toContainText('Олена Коваль');
@@ -64,8 +64,11 @@ test('спершу класи планшета, потім учні класу; 
     student('b', 'Андрій Мельник', '10-А'),
     student('c', 'Богдан Ткач', '6-А'),
     student('d', 'Ірина Лисенко', '5-Б'),
+    student('e', 'Ярина Біла', '9 Харків'),
+    student('f', 'Тарас Бойко', '6'),
   ]);
-  await expect(classButtons(page)).toHaveText(['5-Б', '6-А', '10-А']);
+  // Клас — як його написали; числа впорядковуються як числа.
+  await expect(classButtons(page)).toHaveText(['5-Б', '6', '6-А', '9 Харків', '10-А']);
 
   await classButtons(page).filter({ hasText: '6-А' }).click();
   await expect(studentButtons(page)).toHaveText(['Богдан Ткач', 'Олена Коваль']);
@@ -74,7 +77,7 @@ test('спершу класи планшета, потім учні класу; 
   await expect(classField(page)).toHaveValue('6-А');
   await page.getByRole('button', { name: 'Назад' }).click();
   await page.getByRole('button', { name: '← Інший клас' }).click();
-  await expect(classButtons(page)).toHaveCount(3);
+  await expect(classButtons(page)).toHaveCount(5);
 
   await classButtons(page).filter({ hasText: '6-А' }).click();
   await studentButtons(page).filter({ hasText: 'Олена Коваль' }).click();
@@ -95,14 +98,15 @@ test('у кожного учня свій код; «Змінити учня»; �
 
   await page.getByRole('button', { name: /Змінити учня/ }).click();
   await expect(whoTitle(page)).toBeVisible();
-  await createStudent(page, 'Богдан Ткач', '7-Б');
+  await createStudent(page, 'Богдан Ткач', '9   Харків');
   await expect(page.locator('.work .cm-content')).toBeVisible();
   await expect(page.locator('.work .cm-content')).not.toContainText('Олена');
+  await expect(page.locator('#student')).toContainText('9 Харків');
 
   // Нове відкриття сайту (інша вкладка) — знову «Хто ти?».
   const other = await context.newPage();
   await other.goto('./#/sandbox');
-  await expect(classButtons(other)).toHaveText(['6-А', '7-Б']);
+  await expect(classButtons(other)).toHaveText(['6-А', '9 Харків']);
   await classButtons(other).filter({ hasText: '6-А' }).click();
   await studentButtons(other).filter({ hasText: 'Олена Коваль' }).click();
   await expect(other.locator('.work .cm-content')).toContainText('print("Олена")');

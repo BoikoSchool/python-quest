@@ -143,14 +143,17 @@ export function renderMap(main, { topics, statusOf, storageWorks, sendingOn, onH
 // Латинські літери, які виглядають як українські: учень бачить «6-А», хоч набрав латинську A.
 const LATIN_LOOKALIKE = { A: 'А', B: 'В', C: 'С', E: 'Е', H: 'Н', I: 'І', K: 'К', M: 'М', O: 'О', P: 'Р', T: 'Т', X: 'Х' };
 
-/** «6а», «6 А», «6-а» → «6-А». null — якщо так клас не записують. */
+/**
+ * Клас — як учень його пише: «6», «9 Харків», «6-А». Лише короткий запис «6а», «6 а», «6-а»
+ * стає «6-А», щоб той самий клас не роздвоювався. null — якщо порожньо або задовго.
+ */
 export function normalizeClass(text) {
-  const match = text.trim().toUpperCase().match(/^(\d{1,2})\s*[-–—]?\s*(\p{L})$/u);
-  if (!match) return null;
-  const letter = LATIN_LOOKALIKE[match[2]] ?? match[2];
-  const grade = Number(match[1]);
-  if (grade < 1 || grade > 12 || !/[А-ЩЬЮЯҐЄІЇ]/.test(letter)) return null;
-  return `${grade}-${letter}`;
+  const clean = text.trim().replace(/\s+/g, ' ');
+  if (!/[\p{L}\d]/u.test(clean) || clean.length > 30) return null;
+  const short = clean.match(/^(\d{1,2}) ?[-–—]? ?(\p{L})$/u);
+  if (!short) return clean;
+  const letter = short[2].toUpperCase();
+  return `${Number(short[1])}-${LATIN_LOOKALIKE[letter] ?? letter}`;
 }
 
 /** «  олена   коваль » → «Олена Коваль». null — якщо немає імені й прізвища. */
@@ -161,11 +164,8 @@ export function normalizeName(text) {
   return name.length <= 60 ? name : null;
 }
 
-const byClass = (a, b) => {
-  const [gradeA, letterA] = a.split('-');
-  const [gradeB, letterB] = b.split('-');
-  return Number(gradeA) - Number(gradeB) || letterA.localeCompare(letterB, 'uk');
-};
+// Числа в назві класу порівнюються як числа: 5-Б, 6, 9 Харків, 10-А.
+const byClass = (a, b) => a.localeCompare(b, 'uk', { numeric: true });
 
 /**
  * Екран «Хто ти?». Спершу класи, які є на цьому планшеті, потім учні вибраного класу
@@ -224,12 +224,12 @@ export function renderWho(main, { profiles, legacy, sendingOn, onPick, onCreate 
         const name = normalizeName(form.elements.namedItem('name').value);
         const cls = normalizeClass(form.elements.namedItem('class').value);
         if (!name) error.textContent = 'Напиши ім\'я та прізвище, наприклад: Олена Коваль.';
-        else if (!cls) error.textContent = 'Напиши клас так: 6-А.';
+        else if (!cls) error.textContent = 'Напиши свій клас, наприклад: 6-А.';
         else onCreate({ name, className: cls });
       },
     },
     ...field('who-name', 'Ім\'я та прізвище', { name: 'name', autocapitalize: 'words', placeholder: 'Олена Коваль', maxlength: '60' }),
-    ...field('who-class', 'Клас', { name: 'class', autocapitalize: 'characters', placeholder: '6-А', maxlength: '6', value: className || null }),
+    ...field('who-class', 'Клас', { name: 'class', autocapitalize: 'sentences', placeholder: '6-А', maxlength: '30', value: className || null }),
     error,
     h('div', { class: 'who__actions' },
       h('button', { class: 'btn btn--check', type: 'submit' }, 'Почати'),
