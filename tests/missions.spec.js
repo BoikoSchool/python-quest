@@ -5,7 +5,7 @@
 // тому там, де їх немає (CI), тести з розв'язками пропускаються.
 
 import { existsSync, readFileSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures.js';
 import { checkButton, openApp, setCode } from './helpers.js';
 
 const readJson = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));

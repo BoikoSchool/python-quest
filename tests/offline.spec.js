@@ -1,7 +1,7 @@
 // Робота без інтернету (Service Worker) і банер «Доступне оновлення».
 
 import { readFileSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures.js';
 import { openApp, runButton, setCode } from './helpers.js';
 
 /** Чекає, поки Service Worker закешує сайт і почне керувати сторінкою. */

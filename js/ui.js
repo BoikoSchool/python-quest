@@ -45,6 +45,25 @@ export function showPythonStatus(status, details, onRetry) {
   document.getElementById('py-progress').hidden = status !== 'loading';
 }
 
+/**
+ * Учень у верхній панелі й кнопка «Змінити учня». profile = null — учня ще не обрано:
+ * ховаємо і його, і розділи сайту (поки екран «Хто ти?»).
+ */
+export function showStudent(profile, onSwitch) {
+  const box = document.getElementById('student');
+  document.querySelector('.topbar__nav').hidden = !profile;
+  box.hidden = !profile;
+  if (!profile) {
+    box.replaceChildren();
+    return;
+  }
+  box.replaceChildren(
+    h('span', { class: 'student__name' }, profile.name),
+    h('span', { class: 'student__class' }, profile.className),
+    h('button', { class: 'btn btn--ghost btn--small', type: 'button', 'aria-label': `Змінити учня (зараз ${profile.name})`,
+      onClick: onSwitch }, 'Змінити учня'));
+}
+
 export function setActiveNav(name) {
   for (const link of document.querySelectorAll('[data-nav]')) {
     if (link.dataset.nav === name) link.setAttribute('aria-current', 'page');
@@ -85,7 +104,7 @@ function renderHomeHint(onClose) {
   return hint;
 }
 
-export function renderMap(main, { topics, statusOf, storageWorks, onHomeHintClose = null }) {
+export function renderMap(main, { topics, statusOf, storageWorks, sendingOn, onHomeHintClose = null }) {
   let number = 0;
   main.replaceChildren(
     h('div', { class: 'map' },
@@ -111,19 +130,128 @@ export function renderMap(main, { topics, statusOf, storageWorks, onHomeHintClos
       h('a', { class: 'sandbox-card', href: '#/sandbox' },
         h('span', { class: 'sandbox-card__title' }, 'Пісочниця'),
         h('span', { class: 'sandbox-card__text' }, 'Вільний редактор без завдання: пробуй що завгодно.')),
-      h('p', { class: 'map__note' }, 'Прогрес зберігається лише в цьому браузері на цьому пристрої.'),
+      h('p', { class: 'map__note' }, sendingOn
+        ? 'Твій код і прогрес зберігаються лише на цьому планшеті. Про зараховані місії дізнається вчитель.'
+        : 'Твій код і прогрес зберігаються лише на цьому планшеті.'),
     ),
   );
   main.querySelector('h1').focus({ preventScroll: true });
 }
 
-// ---------- Налаштування: прогрес у файл і назад ----------
+// ---------- «Хто ти?»: вибір учня на спільному планшеті ----------
+
+// Латинські літери, які виглядають як українські: учень бачить «6-А», хоч набрав латинську A.
+const LATIN_LOOKALIKE = { A: 'А', B: 'В', C: 'С', E: 'Е', H: 'Н', I: 'І', K: 'К', M: 'М', O: 'О', P: 'Р', T: 'Т', X: 'Х' };
+
+/** «6а», «6 А», «6-а» → «6-А». null — якщо так клас не записують. */
+export function normalizeClass(text) {
+  const match = text.trim().toUpperCase().match(/^(\d{1,2})\s*[-–—]?\s*(\p{L})$/u);
+  if (!match) return null;
+  const letter = LATIN_LOOKALIKE[match[2]] ?? match[2];
+  const grade = Number(match[1]);
+  if (grade < 1 || grade > 12 || !/[А-ЩЬЮЯҐЄІЇ]/.test(letter)) return null;
+  return `${grade}-${letter}`;
+}
+
+/** «  олена   коваль » → «Олена Коваль». null — якщо немає імені й прізвища. */
+export function normalizeName(text) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.some((word) => !/^\p{L}/u.test(word))) return null;
+  const name = words.map((word) => word[0].toLocaleUpperCase('uk') + word.slice(1)).join(' ');
+  return name.length <= 60 ? name : null;
+}
+
+const byClass = (a, b) => {
+  const [gradeA, letterA] = a.split('-');
+  const [gradeB, letterB] = b.split('-');
+  return Number(gradeA) - Number(gradeB) || letterA.localeCompare(letterB, 'uk');
+};
+
+/**
+ * Екран «Хто ти?». Спершу класи, які є на цьому планшеті, потім учні вибраного класу
+ * (учнів може бути 150). «Я тут уперше» відкриває форму з іменем і класом.
+ *   onPick(id) — учень знайшов себе; onCreate({ name, className }) — новий учень.
+ *   legacy — на планшеті є прогрес з часів до профілів; sendingOn — результати бачить учитель.
+ */
+export function renderWho(main, { profiles, legacy, sendingOn, onPick, onCreate }) {
+  const classes = [...new Set(profiles.map((p) => p.className))].sort(byClass);
+
+  const screen = (lead, ...content) => {
+    main.replaceChildren(h('div', { class: 'who' },
+      h('h1', { class: 'map__title', tabindex: '-1' }, 'Хто ти?'),
+      h('p', { class: 'map__lead' }, lead),
+      ...content,
+      sendingOn && h('p', { class: 'map__note' },
+        'Коли місію зараховано, твоє ім\'я, клас і код отримає вчитель.')));
+    main.querySelector('h1').focus({ preventScroll: true });
+  };
+  const firstTimeButton = (className) => h('button', { class: 'btn btn--check', type: 'button',
+    onClick: () => showForm(className) }, 'Я тут уперше');
+
+  function showClasses() {
+    if (classes.length === 0) {
+      showForm('');
+      return;
+    }
+    screen('Обери свій клас.',
+      h('ul', { class: 'who__grid' }, ...classes.map((className) => h('li', {},
+        h('button', { class: 'who__choice who__choice--class', type: 'button', onClick: () => showStudents(className) },
+          className)))),
+      h('div', { class: 'who__actions' }, firstTimeButton('')));
+  }
+
+  function showStudents(className) {
+    const students = profiles.filter((p) => p.className === className)
+      .sort((a, b) => a.name.localeCompare(b.name, 'uk'));
+    screen(`Клас ${className}. Знайди своє ім'я.`,
+      h('ul', { class: 'who__grid who__grid--names' }, ...students.map((student) => h('li', {},
+        h('button', { class: 'who__choice', type: 'button', onClick: () => onPick(student.id) }, student.name)))),
+      h('div', { class: 'who__actions' },
+        firstTimeButton(className),
+        h('button', { class: 'btn btn--ghost', type: 'button', onClick: showClasses }, '← Інший клас')));
+  }
+
+  function showForm(className) {
+    const field = (id, label, attrs) => [
+      h('label', { class: 'who__label', for: id }, label),
+      h('input', { class: 'who__input', id, type: 'text', autocomplete: 'off', autocorrect: 'off', spellcheck: 'false', ...attrs }),
+    ];
+    const error = h('p', { class: 'who__error', role: 'alert' });
+    const form = h('form', {
+      class: 'who__form',
+      onSubmit: (event) => {
+        event.preventDefault();
+        const name = normalizeName(form.elements.namedItem('name').value);
+        const cls = normalizeClass(form.elements.namedItem('class').value);
+        if (!name) error.textContent = 'Напиши ім\'я та прізвище, наприклад: Олена Коваль.';
+        else if (!cls) error.textContent = 'Напиши клас так: 6-А.';
+        else onCreate({ name, className: cls });
+      },
+    },
+    ...field('who-name', 'Ім\'я та прізвище', { name: 'name', autocapitalize: 'words', placeholder: 'Олена Коваль', maxlength: '60' }),
+    ...field('who-class', 'Клас', { name: 'class', autocapitalize: 'characters', placeholder: '6-А', maxlength: '6', value: className || null }),
+    error,
+    h('div', { class: 'who__actions' },
+      h('button', { class: 'btn btn--check', type: 'submit' }, 'Почати'),
+      classes.length > 0 && h('button', { class: 'btn btn--ghost', type: 'button',
+        onClick: () => (className ? showStudents(className) : showClasses()) }, 'Назад')));
+
+    screen('Напиши своє ім\'я, прізвище й клас. Пароль не потрібен.',
+      legacy && h('p', { class: 'notice' }, 'Прогрес, який уже є на цьому планшеті, перейде до першого учня.'),
+      form);
+  }
+
+  showClasses();
+}
+
+// ---------- Налаштування: прогрес у файл і назад, учні планшета ----------
 
 /**
  * Малює екран налаштувань. Самі дії — в app.js:
- *   onExport(), onImport(file), onReset() повертають текст для учня (або кидають помилку з текстом).
+ *   onExport(), onImport(file), onReset(), onDelete(profile) повертають текст для учня
+ *   (або кидають помилку з текстом). student — поточний учень, profiles — усі учні планшета.
  */
-export function renderSettings(main, { onExport, onImport, onReset }) {
+export function renderSettings(main, { student, profiles, onExport, onImport, onReset, onDelete }) {
   const message = h('p', { class: 'settings__message', role: 'status', 'aria-live': 'polite' });
   const show = (text, kind) => {
     message.textContent = text;
@@ -155,8 +283,9 @@ export function renderSettings(main, { onExport, onImport, onReset }) {
       h('h1', { class: 'map__title', tabindex: '-1' }, 'Налаштування'),
       message,
       h('section', { class: 'settings__card', 'aria-labelledby': 'progress-title' },
-        h('h2', { class: 'settings__title', id: 'progress-title' }, 'Мій прогрес'),
-        h('p', {}, 'Прогрес зберігається лише в цьому браузері. Safari може стерти його, якщо довго не заходити на сайт.'),
+        h('h2', { class: 'settings__title', id: 'progress-title' }, `Мій прогрес: ${student.name}, ${student.className}`),
+        h('p', {}, 'Прогрес зберігається лише в цьому браузері на цьому планшеті. '
+          + 'Safari може стерти його, якщо довго не заходити на сайт.'),
         h('p', {}, 'Збережи прогрес у файл, щоб не втратити його або перенести на інший пристрій. '
           + 'Під час відновлення нічого не зникає: виконані місії лишаються виконаними.'),
         h('div', { class: 'settings__actions' },
@@ -165,9 +294,27 @@ export function renderSettings(main, { onExport, onImport, onReset }) {
           fileInput)),
       h('section', { class: 'settings__card', 'aria-labelledby': 'reset-title' },
         h('h2', { class: 'settings__title', id: 'reset-title' }, 'Почати спочатку'),
-        h('p', {}, 'Видаляє код і прогрес усіх місій на цьому пристрої.'),
+        h('p', {}, 'Видаляє твій код і прогрес усіх місій на цьому планшеті. Інших учнів це не зачепить.'),
         h('div', { class: 'settings__actions' },
           h('button', { class: 'btn btn--danger', type: 'button', onClick: () => act(onReset) }, 'Скинути все'))),
+      h('section', { class: 'settings__card', 'aria-labelledby': 'students-title' },
+        h('h2', { class: 'settings__title', id: 'students-title' }, 'Видалити учня з цього планшета'),
+        h('p', {}, 'Учень зникне зі списку «Хто ти?» разом зі своїм кодом і прогресом на цьому планшеті. '
+          + 'Те, що вже надіслано вчителю, лишається в таблиці.'),
+        h('ul', { class: 'settings__students' },
+          ...[...profiles].sort((a, b) => byClass(a.className, b.className) || a.name.localeCompare(b.name, 'uk'))
+            .map((profile) => {
+              const item = h('li', { class: 'settings__student' },
+                h('span', {}, `${profile.className} · ${profile.name}`),
+                h('button', { class: 'btn btn--danger btn--small', type: 'button',
+                  'aria-label': `Видалити учня ${profile.name}, ${profile.className}`,
+                  onClick: () => act(() => {
+                    const text = onDelete(profile);
+                    if (text) item.remove();
+                    return text;
+                  }) }, 'Видалити'));
+              return item;
+            }))),
     ),
   );
   main.querySelector('h1').focus({ preventScroll: true });
@@ -313,18 +460,29 @@ function renderLearn(learn, { open, onTry, onToggle }) {
 
 // ---------- Підказки: по одній, коли учень сам попросить ----------
 
-function renderHints(hints) {
+/** opened — скільки підказок учень уже відкрив раніше; onShow(count) — відкрив ще одну. */
+function renderHints(hints, { opened = 0, onShow }) {
   let shown = 0;
   const list = h('ol', { class: 'hints__list', 'aria-live': 'polite' });
   const button = h('button', { class: 'btn btn--ghost btn--small', type: 'button' }, 'Не виходить? Підказка');
-  button.addEventListener('click', () => {
+  const showNext = () => {
     list.append(h('li', {}, hints[shown]));
     shown += 1;
     if (shown === hints.length) button.hidden = true;
     else button.textContent = `Ще підказка (${shown + 1} з ${hints.length})`;
+  };
+  while (shown < Math.min(opened, hints.length)) showNext();
+  button.addEventListener('click', () => {
+    showNext();
+    onShow(shown);
   });
   return h('div', { class: 'hints' }, list, button);
 }
+
+const SENT_TEXT = {
+  sent: '✔ Результат надіслано вчителю',
+  queued: 'Результат надішлеться, коли з\'явиться інтернет',
+};
 
 // ---------- Робоче місце: місія або пісочниця ----------
 
@@ -333,7 +491,8 @@ function renderHints(hints) {
  * Повертає об'єкт, через який app.js оновлює екран.
  */
 export function renderWorkspace(main, {
-  mission, status, stdin, timeLimitMs, learnOpen, onRun, onCheck, onStdinChange, onTryExample, onLearnToggle,
+  mission, status, stdin, timeLimitMs, learnOpen, hintsOpened, onRun, onCheck, onStdinChange, onTryExample,
+  onLearnToggle, onHint,
 }) {
   const editorHost = h('div', { class: 'editor' });
   const learn = mission?.learn
@@ -397,7 +556,7 @@ export function renderWorkspace(main, {
     !mission && h('h1', { class: 'work__title', tabindex: '-1' }, 'Пісочниця'),
     h('div', { class: 'toolbar' }, runButton, checkButton, busyText),
     editorHost,
-    mission?.hints?.length > 0 && renderHints(mission.hints),
+    mission?.hints?.length > 0 && renderHints(mission.hints, { opened: hintsOpened, onShow: onHint }),
     stdinBox,
     output);
 
@@ -439,6 +598,7 @@ export function renderWorkspace(main, {
     /**
      * Звіт перевірки. Якщо всі тести пройдено — запитання на розуміння (якщо є),
      * а після правильної відповіді onSolved() і кнопка «Наступна місія».
+     * onSolved() може повернути проміс 'sent' | 'queued' — тоді показуємо, що з результатом для вчителя.
      */
     showCheckReport(report, { outcome, question, onSolved, next }) {
       if (outcome.unavailable) {
@@ -460,14 +620,20 @@ export function renderWorkspace(main, {
       }
 
       const showSuccess = () => {
-        onSolved();
+        const sending = onSolved();
         doneChip.hidden = false;
+        const sent = h('p', { class: 'success__sent', role: 'status' });
         const success = h('div', { class: 'success' },
           h('p', { class: 'success__title' }, 'Місію виконано!'),
           next
             ? h('a', { class: 'btn btn--run', href: next.href }, 'Наступна місія')
             : h('a', { class: 'btn btn--check', href: '#/' }, 'До карти місій'),
-          next && h('p', { class: 'success__next' }, next.title));
+          next && h('p', { class: 'success__next' }, next.title),
+          sent);
+        sending?.then((result) => {
+          sent.textContent = SENT_TEXT[result];
+          sent.className = `success__sent success__sent--${result}`;
+        });
         const form = outputBody.querySelector('.question');
         if (form) form.replaceWith(success);
         else outputBody.append(success);

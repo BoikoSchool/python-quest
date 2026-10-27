@@ -1,5 +1,6 @@
 // Точка входу: одразу починає готувати Python, завантажує місії і перемикає екрани.
 //
+// Поки учень не сказав, хто він, на будь-якій адресі показуємо «Хто ти?» (планшети спільні).
 // Екрани (адреса після #):
 //   #/            карта місій
 //   #/m/<id>      місія
@@ -11,6 +12,7 @@ import { DEFAULT_TIME_LIMIT_MS, PythonRunner } from './runner.js';
 import { createEditor } from './editor.js';
 import { evaluateTests } from './checker.js';
 import { keepPythonOffline, shouldSuggestHomeScreen, startOffline } from './offline.js';
+import { resultsEnabled, sendResult, startResults } from './results.js';
 import * as storage from './storage.js';
 import * as ui from './ui.js';
 
@@ -33,6 +35,9 @@ const runner = new PythonRunner({
   startAfter: offlineReady,
 });
 runner.whenReady().then((ok) => ok && keepPythonOffline());
+
+// Результати для вчителя, які не вдалося надіслати раніше, підуть зараз або коли з'явиться мережа.
+startResults();
 
 // 3. Місії: порядок і теми з missions/index.json, кожна місія — окремий файл.
 async function fetchJson(url) {
@@ -77,8 +82,10 @@ async function runCode(view, editor, { stdin, timeLimitMs, show = view.showRunRe
 async function checkMission(view, editor, mission) {
   editor.clearErrorLine();
   view.setBusy(true, runner.status === 'ready' ? 'Перевіряємо…' : 'Чекаємо, поки Python буде готовий…');
-  // Усі тести — одним повідомленням до worker.
-  const outcome = await runner.run(editor.getCode(), mission.tests.map((test) => test.input), {
+  // Усі тести — одним повідомленням до worker. Учителю піде саме цей код, навіть якщо учень змінить його,
+  // поки відповідає на запитання.
+  const code = editor.getCode();
+  const outcome = await runner.run(code, mission.tests.map((test) => test.input), {
     timeLimitMs: mission.timeLimitMs ?? DEFAULT_TIME_LIMIT_MS,
   });
   view.setBusy(false);
@@ -88,11 +95,32 @@ async function checkMission(view, editor, mission) {
   view.showCheckReport(report, {
     outcome,
     question: mission.question,
-    onSolved: () => storage.markMissionDone(mission.id),
+    onSolved: () => solved(mission, code),
     next: next ? { title: next.title, href: `#/m/${next.id}` } : null,
   });
   const failure = report.failure;
   if (failure && !failure.hidden && failure.error?.line) editor.showErrorLine(failure.error.line);
+}
+
+/**
+ * Місію зараховано. Якщо вперше і надсилання ввімкнене — запис для вчителя.
+ * Повертає проміс 'sent' | 'queued' або null, якщо нічого не надсилаємо.
+ */
+function solved(mission, code) {
+  if (!storage.markMissionDone(mission.id) || !resultsEnabled()) return null;
+  const student = storage.currentProfile();
+  const work = storage.getMissionWork(mission.id);
+  return sendResult({
+    time: new Date(work.doneAt).toISOString(),
+    student: student.name,
+    className: student.className,
+    missionId: mission.id,
+    missionTitle: mission.title,
+    checks: work.checks ?? 0,
+    hints: work.hints ?? 0,
+    minutes: work.firstOpenedAt ? Math.round((work.doneAt - work.firstOpenedAt) / 60_000) : null,
+    code,
+  });
 }
 
 // 5. Екрани.
@@ -106,6 +134,7 @@ function openMap() {
     topics: catalog.topics,
     statusOf: storage.getMissionStatus,
     storageWorks: storage.isStorageWorking(),
+    sendingOn: resultsEnabled(),
     onHomeHintClose: shouldSuggestHomeScreen() && !storage.getSetting('homeHintClosed')
       ? () => storage.saveSetting('homeHintClosed', true)
       : null,
@@ -115,6 +144,7 @@ function openMap() {
 function openMission(mission) {
   ui.setActiveNav(null);
   document.title = `${mission.title} — Python Quest`;
+  storage.noteMissionOpened(mission.id);
   const saved = storage.getMissionWork(mission.id);
   const code = saved?.code ?? mission.starter;
   const timeLimitMs = mission.timeLimitMs ?? DEFAULT_TIME_LIMIT_MS;
@@ -125,7 +155,9 @@ function openMission(mission) {
     stdin: saved?.stdin ?? mission.example?.input ?? '',
     timeLimitMs,
     learnOpen: storage.isLearnOpen(mission.id),
+    hintsOpened: saved?.hints ?? 0,
     onLearnToggle: (open) => storage.saveLearnOpen(mission.id, open),
+    onHint: (count) => storage.saveHintsShown(mission.id, count),
     onStdinChange: (stdin) => storage.saveMissionWork(mission.id, { stdin }),
     onRun: () => {
       storage.saveMissionWork(mission.id, { code: editor.getCode(), stdin: view.getStdin() });
@@ -133,6 +165,7 @@ function openMission(mission) {
     },
     onCheck: () => {
       storage.saveMissionWork(mission.id, { code: editor.getCode() });
+      storage.countCheck(mission.id);
       checkMission(view, editor, mission);
     },
     // Приклад з «Як це працює». Його зміни не зберігаємо: після оновлення сторінки він знову як був.
@@ -195,13 +228,20 @@ function saveFile(name, text) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
+/** «Олена Коваль», «6-А» → «Олена-Коваль-6-А» для назви файлу. */
+const fileNamePart = (text) => text.trim().replace(/[\s\\/:*?"<>|]+/g, '-');
+
 function openSettings() {
   ui.setActiveNav('settings');
   document.title = 'Налаштування — Python Quest';
+  const student = storage.currentProfile();
   ui.renderSettings(main, {
+    student,
+    profiles: storage.listProfiles(),
     onExport() {
       const date = new Date().toISOString().slice(0, 10);
-      saveFile(`python-quest-progress-${date}.json`, JSON.stringify(storage.exportProgress(), null, 2));
+      const who = fileNamePart(`${student.name} ${student.className}`);
+      saveFile(`python-quest-${who}-${date}.json`, JSON.stringify(storage.exportProgress(), null, 2));
       return 'Файл з прогресом збережено. Знайдеш його в завантаженнях або в застосунку «Файли».';
     },
     async onImport(file) {
@@ -211,22 +251,62 @@ function openSettings() {
       } catch {
         throw new Error('Не вдалося прочитати файл. Вибери файл, який зберіг тренажер, — він закінчується на .json.');
       }
-      if (!confirm('Додати прогрес із файлу до прогресу на цьому пристрої? Виконані місії лишаться виконаними.')) return '';
+      if (!confirm(`Додати прогрес із файлу до прогресу учня ${student.name}? Виконані місії лишаться виконаними.`)) return '';
       const count = storage.importProgress(data);
       return `Прогрес відновлено. Місій у файлі: ${count}.`;
     },
     onReset() {
-      if (!confirm('Точно стерти код і прогрес усіх місій на цьому пристрої? Повернути їх не вийде.')) return '';
+      if (!confirm(`Точно стерти код і прогрес усіх місій учня ${student.name}? Повернути їх не вийде.`)) return '';
       storage.resetAll();
       return 'Усе скинуто. Можна починати спочатку.';
     },
+    onDelete(profile) {
+      if (!confirm(`Видалити учня ${profile.name} (${profile.className}) і весь його прогрес на цьому планшеті? `
+        + 'Повернути не вийде.')) return '';
+      storage.deleteProfile(profile.id);
+      // Видалили себе — далі працює хтось інший.
+      if (profile.id === student.id) setTimeout(route);
+      return `Учня ${profile.name} видалено з цього планшета.`;
+    },
   });
+}
+
+/** «Хто ти?» — поки учня не обрано. Після вибору відкриваємо ту саму адресу. */
+function openWho() {
+  document.title = 'Хто ти? — Python Quest';
+  ui.renderWho(main, {
+    profiles: storage.listProfiles(),
+    legacy: storage.hasLegacyProgress(),
+    sendingOn: resultsEnabled(),
+    onPick: (id) => {
+      storage.selectProfile(id);
+      route();
+    },
+    onCreate: (profile) => {
+      storage.createProfile(profile);
+      route();
+    },
+  });
+}
+
+function switchStudent() {
+  leaveScreen();
+  leaveScreen = () => {};
+  storage.leaveProfile();
+  route();
 }
 
 function route() {
   leaveScreen();
   leaveScreen = () => {};
   storage.flush();
+  const student = storage.currentProfile();
+  ui.showStudent(student, switchStudent);
+  if (!student) {
+    openWho();
+    scrollTo(0, 0);
+    return;
+  }
   const [section, id] = location.hash.replace(/^#\/?/, '').split('/');
   if (section === 'm' && catalog.byId.has(id)) openMission(catalog.byId.get(id));
   else if (section === 'sandbox') openSandbox();

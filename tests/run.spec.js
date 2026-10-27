@@ -1,7 +1,7 @@
 // Запуск коду: Python готується, виконує програму, зупиняє нескінченний цикл,
 // бере вхідні дані з поля й зрозуміло пояснює помилки.
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures.js';
 import { openApp, runButton, setCode, stdinField } from './helpers.js';
 
 test('print("Привіт"), набраний з клавіатури, виводить «Привіт»', async ({ page }, testInfo) => {

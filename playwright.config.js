@@ -15,7 +15,7 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 20_000 },
   fullyParallel: true,
-  workers: process.env.CI ? 2 : 3,
+  workers: 2, // більше — і Pyodide у кількох браузерах одразу може вичерпати пам'ять (процес убивається, код 137)
   retries: process.env.CI ? 1 : 0,
   reporter: [['list']],
   use: {

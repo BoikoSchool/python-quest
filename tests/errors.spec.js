@@ -1,6 +1,6 @@
 // Словник помилок (docs/SPEC.md, п. 3.4): пояснення українською, номер рядка й оригінал Python.
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures.js';
 import { openApp, runButton, setCode } from './helpers.js';
 
 const cases = [

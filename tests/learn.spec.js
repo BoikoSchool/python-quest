@@ -1,7 +1,7 @@
 // «Як це працює»: пояснення теми з прикладом, який можна запустити й змінити; підказки по одній.
 
 import { readFileSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, PROFILE_KEY, test } from './fixtures.js';
 import { openApp } from './helpers.js';
 
 const readMission = (id) => JSON.parse(readFileSync(new URL(`../missions/${id}.json`, import.meta.url), 'utf8'));
@@ -73,13 +73,14 @@ test('блок «Як це працює» пам\'ятає, що його зго
   await expect(learn).toHaveAttribute('open', '');
 
   // Виконана місія — блок згорнутий, поки учень сам його не розгорне.
-  await page.evaluate(() => localStorage.setItem('pyquest:v1', JSON.stringify({
+  await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({
     missions: { 'eco-grams': { status: 'done', code: 'print(1)', updatedAt: 1 } },
     sandbox: { code: '', stdin: '' },
     settings: {},
-  })));
-  await page.goto('./#/m/eco-grams');
+  })), PROFILE_KEY);
+  // Спершу перезавантаження, щоб сайт прочитав підкладений прогрес, а не перезаписав його своїм.
   await page.reload();
+  await page.goto('./#/m/eco-grams');
   await expect(learn).toBeAttached();
   await expect(learn).not.toHaveAttribute('open', '');
   await learn.locator('summary').click();

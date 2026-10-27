@@ -1,7 +1,7 @@
 // Збереження прогресу: код і статус місії лишаються після перезавантаження; експорт, імпорт і скидання.
 
 import { readFile } from 'node:fs/promises';
-import { expect, test } from '@playwright/test';
+import { addStudent, expect, PROFILE_KEY, STUDENT, test } from './fixtures.js';
 import { checkButton, openApp, setCode } from './helpers.js';
 
 test('код місії зберігається, а на карті вона «в роботі»', async ({ page }) => {
@@ -29,11 +29,11 @@ test('зарахована місія лишається «виконано» п
   await expect(page.locator('a[href="#/m/radio-hello"]')).toContainText('Виконано');
 });
 
-// ---------- Експорт, імпорт, скидання ----------
+// ---------- Експорт, імпорт, скидання (для поточного учня) ----------
 
-const KEY = 'pyquest:v1';
+const KEY = PROFILE_KEY;
 
-/** Кладе прогрес у localStorage і відкриває екран заново, щоб сайт його прочитав. */
+/** Кладе прогрес учня в localStorage і відкриває екран заново, щоб сайт його прочитав. */
 async function seed(page, state, hash = '#/settings') {
   await page.goto('./#/');
   await page.evaluate(([key, value]) => localStorage.setItem(key, JSON.stringify(value)), [KEY, state]);
@@ -66,13 +66,16 @@ test('експорт у файл і імпорт на «іншому прист�
   const downloading = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Експортувати прогрес' }).click();
   const download = await downloading;
-  expect(download.suggestedFilename()).toMatch(/^python-quest-progress-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(download.suggestedFilename()).toMatch(/^python-quest-Тестовий-Учень-6-А-\d{4}-\d{2}-\d{2}\.json$/);
   const saved = JSON.parse(await readFile(await download.path(), 'utf8'));
-  expect(saved).toMatchObject({ app: 'python-quest', schema: 1 });
+  expect(saved).toMatchObject({
+    app: 'python-quest', schema: 1, student: { name: STUDENT.name, className: STUDENT.className },
+  });
   await expect(page.locator('.settings__message--ok')).toContainText('Файл з прогресом збережено');
 
-  // Інший пристрій — новий контекст браузера з порожнім сховищем.
+  // Інший пристрій — новий контекст браузера з порожнім сховищем (і тим самим учнем).
   const other = await browser.newPage();
+  await addStudent(other);
   await other.goto('./#/settings');
   await importFile(other, progressFile(saved));
   await expect(other.locator('.settings__message--ok')).toHaveText('Прогрес відновлено. Місій у файлі: 2.');

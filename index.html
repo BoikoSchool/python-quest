@@ -21,7 +21,7 @@
 <body>
   <header class="topbar">
     <a class="topbar__brand" href="#/">Python Quest</a>
-    <nav class="topbar__nav" aria-label="Розділи">
+    <nav class="topbar__nav" aria-label="Розділи" hidden>
       <a class="topbar__link" href="#/" data-nav="map">Карта</a>
       <a class="topbar__link" href="#/sandbox" data-nav="sandbox">Пісочниця</a>
       <a class="topbar__link" href="#/settings" data-nav="settings">Налаштування</a>
@@ -30,6 +30,7 @@
       <span class="py-status__dot py-status__dot--loading" aria-hidden="true"></span>
       <span>Готуємо Python…</span>
     </div>
+    <div class="student" id="student" hidden></div>
   </header>
   <div class="py-progress" id="py-progress" role="progressbar" aria-label="Готуємо Python"><span></span></div>
 

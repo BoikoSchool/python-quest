@@ -1,6 +1,6 @@
 // Редактор: «розумні» лапки й тире, які вставляє iPad, замінюються на звичайні.
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures.js';
 import { openApp, runButton, setCode } from './helpers.js';
 
 /** Текст у редакторі — з того самого vendor/codemirror.js, що й сайт. */

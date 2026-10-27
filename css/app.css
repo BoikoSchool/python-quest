@@ -229,6 +229,28 @@ pre {
   color: var(--ink-muted);
 }
 
+/* Учень, який працює зараз, і «Змінити учня» */
+.student {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.student__name {
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.student__class {
+  margin-left: -4px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
 .py-status__dot {
   width: 10px;
   height: 10px;
@@ -587,6 +609,109 @@ pre {
 
 .settings__message--bad {
   background: var(--bad-bg);
+}
+
+.settings__students {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings__student {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- «Хто ти?» ---------- */
+
+.who {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.who__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.who__grid--names {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.who__choice {
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--raised-border);
+  background: var(--raised-bg);
+  box-shadow: var(--raised-shadow);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.who__choice:hover {
+  border-color: var(--accent);
+}
+
+.who__choice--class {
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.who__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.who__form {
+  display: grid;
+  gap: 6px;
+  max-width: 420px;
+  padding: 4px 20px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--raised-bg);
+  border: 1px solid var(--raised-border);
+  box-shadow: var(--raised-shadow);
+}
+
+.who__label {
+  margin-top: 14px;
+  font-weight: 600;
+}
+
+.who__input {
+  min-height: var(--tap);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.who__error:empty {
+  display: none;
+}
+
+.who__error {
+  margin: 8px 0 0;
+  font-weight: 600;
+  color: var(--bad);
 }
 
 /* ---------- Робоче місце: умова, редактор, результат ---------- */
@@ -1086,6 +1211,22 @@ pre {
 .success__next {
   margin: 0;
   color: var(--ink-muted);
+}
+
+.success__sent:empty {
+  display: none;
+}
+
+.success__sent {
+  margin: 0;
+  flex-basis: 100%;
+  font-size: 15px;
+  color: var(--ink-muted);
+}
+
+.success__sent--sent {
+  color: var(--ok);
+  font-weight: 600;
 }
 
 /* ---------- Менше руху, якщо учень так налаштував пристрій ---------- */
